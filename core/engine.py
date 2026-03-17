@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional
@@ -88,6 +89,7 @@ def run_scenarios_from_root(
         try:
             scenario = load_scenario_from_file(path)
         except Exception as e:
+            traceback.print_exc()
             # If loading fails, surface as an ERROR result.
             sr = ScenarioResult(scenario_name=path.parent.name)
             sr.steps.append(
@@ -349,6 +351,7 @@ class ScenarioEngine:
             )
 
         except Exception as e:
+            traceback.print_exc()
             self._notify(f"[Prompt] 오류: {e}", "error")
             return "", StepResult(
                 step=step_name,
@@ -439,6 +442,7 @@ class ScenarioEngine:
                             judge_result=judge_result,
                         ))
                     except Exception as e:
+                        traceback.print_exc()
                         results.append(StepResult(
                             step=f"Graph Stream [{question}]",
                             status=StepStatus.ERROR,
@@ -447,6 +451,7 @@ class ScenarioEngine:
                         ))
 
         except Exception as e:
+            traceback.print_exc()
             self._notify(f"[Graph] 오류: {e}", "error")
             results.append(StepResult(
                 step=step_name,
@@ -528,6 +533,7 @@ class ScenarioEngine:
                             judge_result=judge_result,
                         ))
                     except Exception as e:
+                        traceback.print_exc()
                         results.append(StepResult(
                             step=f"App Stream [{question}]",
                             status=StepStatus.ERROR,
@@ -536,6 +542,7 @@ class ScenarioEngine:
                         ))
 
         except Exception as e:
+            traceback.print_exc()
             self._notify(f"[App] 오류: {e}", "error")
             results.append(StepResult(
                 step=step_name,
@@ -565,6 +572,7 @@ class ScenarioEngine:
                 resp.raise_for_status()
                 results.append(StepResult(step=f"Cleanup {label}", status=StepStatus.PASS))
             except Exception as e:
+                traceback.print_exc()
                 results.append(StepResult(
                     step=f"Cleanup {label}", status=StepStatus.ERROR, error=str(e)
                 ))
