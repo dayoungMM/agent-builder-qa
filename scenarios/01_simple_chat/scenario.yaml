@@ -1,0 +1,22 @@
+scenario_name: "Simple Chatbot E2E Test"
+graph:
+  id: 7ac8760c-b0e7-4606-aff4-412a106182ed
+  name: "[QA]simple_chatbot"
+  file_path: "./scenarios/01_simple/graph_simple_chatbot.json"
+  auto-delete: true
+  update-if-exists: false
+app:
+  name: "[QA]simple_chatbot_app"
+  auto-delete: true
+prompts:
+  - id: e2bcaeaa-214d-477c-8c9f-cf21f1d52417
+    name: "[QA]generator_basic"
+    json_path: "./scenarios/01_simple/prompt_generator_basic.json" # 실제 body가 담긴 파일
+    auto-delete: true
+    update-if-exists: false
+answer-judge:
+  questions:
+    - "안녕"
+  criteria:
+    - "인사말에 적절히 대답해야 함"
+    - "HTTP Status 200"

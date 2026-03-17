@@ -1,0 +1,196 @@
+{
+  "name": "[QA]graph_llm_parameter",
+  "description": "[QA]graph_llm_parameter",
+  "tags": ["qa"],
+  "graphs": {
+    "edges": [
+      {
+        "id": "c254ca56",
+        "data": {
+          "send_to": "20c07fe0",
+          "category": {
+            "id": "",
+            "category": "",
+            "description": ""
+          },
+          "condition": null,
+          "edge_type": "none",
+          "send_from": "b153394d",
+          "conditions": null
+        },
+        "type": "none",
+        "style": {
+          "stroke": "#C4CADA",
+          "strokeWidth": 3
+        },
+        "source": "b153394d",
+        "target": "20c07fe0",
+        "markerEnd": {
+          "type": "arrowclosed",
+          "color": "#C4CADA",
+          "width": 10,
+          "height": 10
+        },
+        "marker_end": null,
+        "marker_start": null,
+        "reconnectable": null,
+        "source_handle": null,
+        "target_handle": null,
+        "condition_label": null
+      },
+      {
+        "id": "6982329f",
+        "data": {
+          "send_to": "58b50b97",
+          "category": {
+            "id": "",
+            "category": "",
+            "description": ""
+          },
+          "condition": null,
+          "edge_type": "none",
+          "send_from": "20c07fe0",
+          "conditions": null
+        },
+        "type": "none",
+        "style": {
+          "stroke": "#C4CADA",
+          "strokeWidth": 3
+        },
+        "source": "20c07fe0",
+        "target": "58b50b97",
+        "markerEnd": {
+          "type": "arrowclosed",
+          "color": "#C4CADA",
+          "width": 10,
+          "height": 10
+        },
+        "marker_end": null,
+        "marker_start": null,
+        "reconnectable": null,
+        "source_handle": null,
+        "target_handle": null,
+        "condition_label": null
+      }
+    ],
+    "nodes": [
+      {
+        "id": "b153394d",
+        "data": {
+          "id": "b153394d",
+          "name": "input__basic_1",
+          "type": "input__basic",
+          "input_keys": [
+            {
+              "name": "query",
+              "required": true,
+              "description": "사용자의 질의",
+              "fixed_value": null,
+              "keytable_id": "query_b153394d",
+              "object_type": "string"
+            }
+          ],
+          "description": "사용자 질의 입력받았습니다... 🚀"
+        },
+        "type": "input__basic",
+        "style": {},
+        "measured": {
+          "width": 610,
+          "height": 598
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "source_position": "left",
+        "target_position": "right"
+      },
+      {
+        "id": "20c07fe0",
+        "data": {
+          "id": "20c07fe0",
+          "name": "agent__generator_1",
+          "type": "agent__generator",
+          "tool_ids": [],
+          "prompt_id": "13db2e01-6f28-4fad-b37b-e9c2e40676b2",
+          "fewshot_id": "",
+          "input_keys": [
+            {
+              "name": "query",
+              "required": false,
+              "description": "",
+              "fixed_value": null,
+              "keytable_id": "query_b153394d",
+              "object_type": "string"
+            },
+            {
+              "name": "context",
+              "required": false,
+              "description": "",
+              "fixed_value": null,
+              "keytable_id": "",
+              "object_type": "string"
+            }
+          ],
+          "description": "답변을 생성중입니다...🤖",
+          "output_keys": [
+            {
+              "name": "content",
+              "keytable_id": "content_20c07fe0"
+            }
+          ],
+          "mcp_catalogs": [],
+          "serving_name": "GIP/ax4",
+          "serving_model": "GIP/ax4",
+          "model_parameters": {
+            "params": [
+              {
+                "name": "response_format",
+                "type": "object",
+                "value": {
+                  "type": "json_object"
+                }
+              }
+            ]
+          },
+          "tools": []
+        },
+        "type": "agent__generator",
+        "style": {},
+        "measured": {
+          "width": 610,
+          "height": 829
+        },
+        "position": {
+          "x": 690,
+          "y": 0
+        },
+        "selected": false,
+        "source_position": "left",
+        "target_position": "right"
+      },
+      {
+        "id": "58b50b97",
+        "data": {
+          "id": "58b50b97",
+          "name": "output__chat_1",
+          "type": "output__chat",
+          "description": "응답 출력중입니다... 💬",
+          "format_string": "{{content_20c07fe0}}"
+        },
+        "type": "output__chat",
+        "style": {},
+        "measured": {
+          "width": 610,
+          "height": 648
+        },
+        "position": {
+          "x": 1395,
+          "y": 0
+        },
+        "source_position": "left",
+        "target_position": "right"
+      }
+    ]
+  }
+}

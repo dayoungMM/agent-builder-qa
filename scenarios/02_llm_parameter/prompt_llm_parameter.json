@@ -1,0 +1,33 @@
+{
+  "name": "[QA]prompt_llm_parameter",
+  "release": true,
+  "desc": "Basic generator prompt for QA integration test",
+  "messages": [
+    {
+      "mtype": 1,
+      "message": "You are a helpful AI assistant.\nContext: {{context}}"
+    },
+    {
+      "mtype": 2,
+      "message": "Question: {{query}}\nAnswer:"
+    }
+  ],
+  "variables": [
+    {
+      "variable": "context",
+      "validation_flag": false,
+      "validation": "",
+      "token_limit_flag": false,
+      "token_limit": 0
+    },
+    {
+      "variable": "query",
+      "validation_flag": false,
+      "validation": "",
+      "token_limit_flag": false,
+      "token_limit": 0
+    }
+  ],
+  "tags": ["qa"],
+  "ptype": 1
+}
