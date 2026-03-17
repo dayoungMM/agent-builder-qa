@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Streamlit: Agent Builder QA",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "args": [
+        "run",
+        "app_streamlit/main.py",
+        "--server.port=8501",
+        "--server.headless=true"
+      ],
+      "env": {
+        "STREAMLIT_CONFIG": "${workspaceFolder}/.streamlit/config.toml"
+      },
+      "python": "${command:python.interpreterPath}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "preLaunchTask": "Install requirements"
+    }
+  ]
+}

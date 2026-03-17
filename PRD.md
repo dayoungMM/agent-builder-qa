@@ -111,10 +111,47 @@ spec:
 
 1. **Environment Setup**: LLM 설정 및 API Base URL 로드.
 2. **Scenario Loading**: 특정 디렉토리 내 모든 `.yaml` 스캔.
-3. **Prompt Stage**: JSON 페이로드 로드 → Prompt 생성 API 호출 → `prompt_id` 추출 및 변수 저장.
-4. **Graph Stage**: JSON 내 변수 치환(e.g., `{prompt_id}`) → Graph 생성/조회 → Stream API 호출 → **LLM 판정**.
+3. **Prompt Stage**: JSON 페이로드 로드 → Prompt Import/Create API 호출 → `prompt_id` 추출 및 변수 저장.
+4. **Graph Stage**: JSON 내 변수 치환(e.g., `{prompt_name}`) → Graph Import/Create API 호출 → Stream API 호출 → **LLM 판정**.
 5. **App Stage**: 생성된 Graph 기반 App 배포 API 호출 → Stream API 호출 → **LLM 판정**.
-6. **Cleanup**: `auto-delete: true` 항목에 대해 Delete API 순차 실행.
+6. **Cleanup**: `auto-delete: true` 항목에 대해 Delete API 순차 실행 (App → Graph → Prompt).
+
+---
+
+## 4-1. API 엔드포인트 명세
+
+> Base URL: `{adxp-endpoint}` (환경 설정의 Agent Builder Base URL)
+
+### Prompt
+| 동작 | Method | Path |
+|------|--------|------|
+| 생성 (id 미지정) | POST | `/api/v1/agent/inference-prompts` |
+| Import (id 지정) | POST | `/api/v1/agent/inference-prompts/import?prompt_uuid={id}` |
+| 업데이트 | PUT | `/api/v1/agent/inference-prompts/{id}` |
+| 삭제 | DELETE | `/api/v1/agent/inference-prompts/{id}` |
+
+### Graph
+| 동작 | Method | Path |
+|------|--------|------|
+| 생성 (id 미지정) | POST | `/api/v1/agent/agents/graphs` |
+| Import (id 지정) | POST | `/api/v1/agent/agents/graphs/import?agent_id={id}` |
+| 업데이트 | PUT | `/api/v1/agent/agents/graphs/{id}` |
+| 삭제 | DELETE | `/api/v1/agent/agents/graphs/{id}` |
+| Stream 테스트 | POST | `/api/v1/agent/agents/graphs/stream` |
+
+### App
+| 동작 | Method | Path |
+|------|--------|------|
+| 생성 | POST | `/api/v1/agent/agents/apps` |
+| 삭제 | DELETE | `/api/v1/agent/agents/apps/{id}` |
+| Stream 테스트 | POST | `/api/v1/agent_gateway/{app_id}/stream` |
+
+### Import API 동작 규칙
+1. 해당 id가 **존재하지 않으면** → 신규 생성. 응답: `{detail: "Created", code: 1}`
+2. 해당 id가 존재하고 **내용이 일치하면** → 검증 통과. 응답: `{detail: "Validated", code: 1}`
+3. 해당 id가 존재하지만 **내용이 다르면** → 에러 발생
+   - `update-if-exists: true` → PUT으로 업데이트
+   - `update-if-exists: false` → skip (기존 ID 재사용)
 
 ---
 

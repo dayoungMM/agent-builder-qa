@@ -2,7 +2,7 @@ scenario_name: "Simple Chatbot E2E Test"
 graph:
   id: 7ac8760c-b0e7-4606-aff4-412a106182ed
   name: "[QA]simple_chatbot"
-  file_path: "./scenarios/01_simple/graph_simple_chatbot.json"
+  file_path: "./scenarios/01_simple_chat/graph_simple_chatbot.json"
   auto-delete: true
   update-if-exists: false
 app:
@@ -11,7 +11,7 @@ app:
 prompts:
   - id: e2bcaeaa-214d-477c-8c9f-cf21f1d52417
     name: "[QA]generator_basic"
-    json_path: "./scenarios/01_simple/prompt_generator_basic.json" # 실제 body가 담긴 파일
+    json_path: "./scenarios/01_simple_chat/prompt_generator_basic.json"
     auto-delete: true
     update-if-exists: false
 answer-judge:
