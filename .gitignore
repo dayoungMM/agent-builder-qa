@@ -205,4 +205,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-.claude/skills/SKILL.md
+.claude/skills/adxp-agent-e2e-test-helper/echoapi.json
