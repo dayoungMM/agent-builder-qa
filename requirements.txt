@@ -1,0 +1,12 @@
+# Core
+pydantic>=2.0
+pyyaml>=6.0
+httpx>=0.27
+
+# LLM Judge
+langchain-core>=0.3
+langchain-openai>=0.2
+langchain-anthropic>=0.3
+
+# Streamlit UI
+streamlit>=1.35

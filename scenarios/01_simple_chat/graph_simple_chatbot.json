@@ -1,0 +1,180 @@
+{
+  "name": "[QA]simple_chatbot",
+  "description": "[QA]simple_chatbot",
+  "tags": ["qa"],
+  "graphs": {
+    "edges": [
+      {
+        "id": "edge_in_gen",
+        "data": {
+          "send_to": "node_generator",
+          "category": {
+            "id": "",
+            "category": "",
+            "description": ""
+          },
+          "condition": null,
+          "edge_type": "none",
+          "send_from": "node_input",
+          "conditions": null
+        },
+        "type": "none",
+        "style": {
+          "stroke": "#C4CADA",
+          "strokeWidth": 3
+        },
+        "source": "node_input",
+        "target": "node_generator",
+        "markerEnd": {
+          "type": "arrowclosed",
+          "color": "#C4CADA",
+          "width": 10,
+          "height": 10
+        },
+        "marker_end": null,
+        "marker_start": null,
+        "reconnectable": null,
+        "source_handle": null,
+        "target_handle": null,
+        "condition_label": null
+      },
+      {
+        "id": "edge_gen_out",
+        "data": {
+          "send_to": "node_output",
+          "category": {
+            "id": "",
+            "category": "",
+            "description": ""
+          },
+          "condition": null,
+          "edge_type": "none",
+          "send_from": "node_generator",
+          "conditions": null
+        },
+        "type": "none",
+        "style": {
+          "stroke": "#C4CADA",
+          "strokeWidth": 3
+        },
+        "source": "node_generator",
+        "target": "node_output",
+        "markerEnd": {
+          "type": "arrowclosed",
+          "color": "#C4CADA",
+          "width": 10,
+          "height": 10
+        },
+        "marker_end": null,
+        "marker_start": null,
+        "reconnectable": null,
+        "source_handle": null,
+        "target_handle": null,
+        "condition_label": null
+      }
+    ],
+    "nodes": [
+      {
+        "id": "node_input",
+        "data": {
+          "id": "node_input",
+          "name": "input__basic_1",
+          "type": "input__basic",
+          "input_keys": [
+            {
+              "name": "query",
+              "required": true,
+              "description": "사용자의 질의",
+              "fixed_value": null,
+              "keytable_id": "query_node_input",
+              "object_type": "string"
+            }
+          ],
+          "description": "사용자 질의 입력"
+        },
+        "type": "input__basic",
+        "style": {},
+        "measured": {
+          "width": 610,
+          "height": 598
+        },
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "source_position": "left",
+        "target_position": "right"
+      },
+      {
+        "id": "node_generator",
+        "data": {
+          "id": "node_generator",
+          "name": "agent__generator_1",
+          "type": "agent__generator",
+          "tool_ids": [],
+          "prompt_id": "{[QA]generator_basic}",
+          "fewshot_id": "",
+          "input_keys": [
+            {
+              "name": "query",
+              "required": false,
+              "description": "",
+              "fixed_value": null,
+              "keytable_id": "query_node_input",
+              "object_type": "string"
+            }
+          ],
+          "description": "답변 생성 중...",
+          "output_keys": [
+            {
+              "name": "content",
+              "keytable_id": "content_node_generator"
+            }
+          ],
+          "mcp_catalogs": [],
+          "serving_name": "GIP/ax4",
+          "serving_model": "GIP/ax4",
+          "model_parameters": {
+            "params": []
+          },
+          "tools": []
+        },
+        "type": "agent__generator",
+        "style": {},
+        "measured": {
+          "width": 610,
+          "height": 829
+        },
+        "position": {
+          "x": 690,
+          "y": 0
+        },
+        "selected": false,
+        "source_position": "left",
+        "target_position": "right"
+      },
+      {
+        "id": "node_output",
+        "data": {
+          "id": "node_output",
+          "name": "output__chat_1",
+          "type": "output__chat",
+          "description": "응답 출력",
+          "format_string": "{{content_node_generator}}"
+        },
+        "type": "output__chat",
+        "style": {},
+        "measured": {
+          "width": 610,
+          "height": 648
+        },
+        "position": {
+          "x": 1395,
+          "y": 0
+        },
+        "source_position": "left",
+        "target_position": "right"
+      }
+    ]
+  }
+}

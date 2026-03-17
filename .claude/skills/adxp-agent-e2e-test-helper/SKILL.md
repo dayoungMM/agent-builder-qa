@@ -132,21 +132,28 @@ answer-judge 내용을 알려주세요.
 
 ## 시나리오 YAML 구조 (참고)
 
+> **[중요] id 필드 규칙**
+> - `graph`, `prompts`, `tool`, `mcp` 섹션에는 반드시 UUID 형식의 `id` 필드를 지정해야 합니다.
+> - `id`가 있으면 Import API를 사용하여 해당 UUID로 리소스를 생성/검증합니다.
+> - `app`은 id 필드 없이 name만 지정합니다 (Import API 미사용).
+
 ```yaml
 scenario_name: "<시나리오 이름>"
 
 graph:
+  id: "<uuid>"                              # 필수: Import API에 사용할 고정 UUID
   name: "[QA]<graph_name>"
   file_path: "./scenarios/<folder>/graph_<name>.json"
   auto-delete: true
   update-if-exists: false
 
-app:
+app:                                        # id 없음 — Create API만 사용
   name: "[QA]<app_name>"
   auto-delete: true
 
 prompts:                                    # prompt.json이 있는 경우만
-  - name: "[QA]<prompt_name>"
+  - id: "<uuid>"                            # 필수: Import API에 사용할 고정 UUID
+    name: "[QA]<prompt_name>"
     json_path: "./scenarios/<folder>/prompt_<name>.json"
     auto-delete: true
     update-if-exists: false
@@ -158,6 +165,14 @@ answer-judge:
     - "<판정 기준>"
     - "HTTP Status 200"
 ```
+
+### Import API 동작 규칙
+| 상황 | 결과 |
+|------|------|
+| id 미존재 | 신규 생성 (`detail: "Created"`) |
+| id 존재 + 내용 일치 | 검증 통과 (`detail: "Validated"`) |
+| id 존재 + 내용 불일치 + `update-if-exists: true` | PUT으로 업데이트 |
+| id 존재 + 내용 불일치 + `update-if-exists: false` | skip (기존 ID 재사용) |
 
 ---
 
