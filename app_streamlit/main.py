@@ -153,6 +153,12 @@ with st.sidebar:
             value=st.session_state.llm_model,
             placeholder="serving-name",
         )
+        st.session_state.llm_api_key = st.text_input(
+            "API Key",
+            value=st.session_state.llm_api_key,
+            type="password",
+            placeholder="sk-...",
+        )
     else:
         _default_model = (
             "GIP/gpt-4.1" if st.session_state.llm_provider == "openai"

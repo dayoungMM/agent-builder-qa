@@ -176,6 +176,107 @@ class ScenarioEngine:
     # ── 공통 유틸 ──────────────────────────────────
 
     @staticmethod
+    def _format_http_error(e: httpx.HTTPStatusError) -> str:
+        """Return a concise, user-visible HTTP error message."""
+        resp = e.response
+        status = getattr(resp, "status_code", None)
+        reason = getattr(resp, "reason_phrase", "") or ""
+
+        detail: str = ""
+        try:
+            data = resp.json()
+            if isinstance(data, dict):
+                for k in ("detail", "message", "error", "errors"):
+                    v = data.get(k)
+                    if isinstance(v, str) and v.strip():
+                        detail = v.strip()
+                        break
+                if not detail:
+                    detail = json.dumps(data, ensure_ascii=False)[:800]
+            elif isinstance(data, list):
+                detail = json.dumps(data, ensure_ascii=False)[:800]
+        except Exception:
+            try:
+                detail = (resp.text or "").strip()[:800]
+            except Exception:
+                detail = ""
+
+        prefix = f"HTTP {status} {reason}".strip()
+        if detail:
+            return f"{prefix} - {detail}"
+        return prefix or str(e)
+
+    def _request_or_raise(
+        self,
+        method: str,
+        url: str,
+        *,
+        error_message: str,
+        error_level: str = "error",
+        **kwargs,
+    ) -> httpx.Response:
+        try:
+            resp = self.client.request(method, url, **kwargs)
+            resp.raise_for_status()
+            return resp
+        except httpx.HTTPStatusError as e:
+            self._notify(f"{error_message} ({self._format_http_error(e)})", error_level)
+            raise
+
+    def _resource_exists(self, get_url: str, resource_id: str) -> bool:
+        """Return True if GET {get_url}/{resource_id} succeeds (non-404)."""
+        try:
+            resp = self.client.get(f"{get_url}/{resource_id}")
+            if resp.is_success:
+                return True
+            elif resp.json().get("code") == -102:
+                return False
+            elif resp.status_code == 403:
+                return False
+            resp.raise_for_status()
+            return True
+        except httpx.HTTPStatusError as e:
+            self._notify(
+                f"  → 존재 여부 확인 실패: {resource_id} ({self._format_http_error(e)})",
+                "error",
+            )
+            raise
+
+    def _put_update(self, put_url: str, payload: dict, resource_id: str) -> None:
+        self._request_or_raise(
+            "PUT",
+            put_url,
+            json=payload,
+            error_message=f"  → PUT 업데이트 실패: {resource_id}",
+            error_level="error",
+        )
+
+    def _post_import(
+        self,
+        import_url: str,
+        id_param: str,
+        resource_id: str,
+        payload: dict,
+        update_if_exists: bool,
+        put_url: str,
+    ) -> None:
+        try:
+            resp = self.client.post(import_url, params={id_param: resource_id}, json=payload)
+            resp.raise_for_status()
+            detail = resp.json().get("detail", "")
+            self._notify(f"  → Import {detail}: {resource_id}")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 405 and update_if_exists:
+                self._notify(f"  → 충돌, PUT 업데이트: {resource_id}", "warning")
+                self._put_update(put_url, payload, resource_id)
+                return
+            self._notify(
+                f"  → Import 실패: {resource_id} ({self._format_http_error(e)})",
+                "error",
+            )
+            raise
+
+    @staticmethod
     def _resolve_path(path_str: str, scenario_dir: str) -> str:
         """상대 경로를 실제 파일 경로로 변환합니다. CWD → 시나리오 디렉토리 순으로 탐색."""
         p = Path(path_str)
@@ -265,18 +366,25 @@ class ScenarioEngine:
         - Created / Validated → resource_id 반환
         - 충돌(HTTP 에러): update_if_exists=True → PUT 업데이트, False → skip
         """
-        try:
-            resp = self.client.post(import_url, params={id_param: resource_id}, json=payload)
-            resp.raise_for_status()
-            detail = resp.json().get("detail", "")
-            self._notify(f"  → Import {detail}: {resource_id}")
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 405 and update_if_exists:
-                self._notify(f"  → 충돌, PUT 업데이트: {resource_id}", "warning")
-                put_resp = self.client.put(put_url, json=payload)
-                put_resp.raise_for_status()
+        # Preflight: if resource already exists, update/skip without calling POST /import.
+        get_url = import_url.removesuffix("/import")
+        if self._resource_exists(get_url, resource_id):
+            if update_if_exists:
+                self._notify(f"  → 이미 존재, PUT 업데이트: {resource_id}", "warning")
+                self._put_update(put_url, payload, resource_id)
             else:
-                e.response.raise_for_status()
+                self._notify(f"  → 이미 존재, 스킵: {resource_id}", "warning")
+            return resource_id
+
+        # Not found (404) → proceed with POST /import.
+        self._post_import(
+            import_url=import_url,
+            id_param=id_param,
+            resource_id=resource_id,
+            payload=payload,
+            update_if_exists=update_if_exists,
+            put_url=put_url,
+        )
         return resource_id
 
     def _stream_graph(self, graph_id: str, query: str) -> str:

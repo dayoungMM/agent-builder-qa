@@ -111,10 +111,35 @@ spec:
 
 1. **Environment Setup**: LLM 설정 및 API Base URL 로드.
 2. **Scenario Loading**: 특정 디렉토리 내 모든 `.yaml` 스캔.
-3. **Prompt Stage**: JSON 페이로드 로드 → Prompt Import/Create API 호출 → `prompt_id` 추출 및 변수 저장.
-4. **Graph Stage**: JSON 내 변수 치환(e.g., `{prompt_name}`) → Graph Import/Create API 호출 → Stream API 호출 → **LLM 판정**.
-5. **App Stage**: 생성된 Graph 기반 App 배포 API 호출 → Stream API 호출 → **LLM 판정**.
-6. **Cleanup**: `auto-delete: true` 항목에 대해 Delete API 순차 실행 (App → Graph → Prompt).
+3. **리소스 준비 단계** (Prompts → Graph 순서로 처리):
+   - **Prompts/Tools/MCPs Stage**: 아래 리소스 처리 로직에 따라 각 리소스를 준비하고 ID 맵 구성.
+   - **LLM 치환값 맵 구성**: `scenario.yaml`의 `llm` 항목에서 `placeholder_in_graph`를 key, `replace_to`를 value로 맵에 추가.
+   - **Graph Stage**: ID 맵 기반으로 graph JSON 내 `@@...@@` 변수 치환 후 Graph 생성/업데이트.
+4. **App Stage**: 생성된 Graph 기반 App 배포 API 호출 → Stream API 호출 → **LLM 판정**.
+5. **Cleanup**: `auto-delete: true` 항목에 대해 Delete API 순차 실행 (App → Graph → Prompt).
+
+### **리소스 처리 로직 (Prompts / Tools / MCPs 공통)**
+
+```
+1. GET API로 동일한 name을 가진 리소스 검색
+2. 검색 결과가 있으면:
+   a. update-if-exists == true → PUT API로 업데이트
+   b. update-if-exists == false → 기존 리소스 재사용 (업데이트 생략)
+3. 검색 결과가 없으면: POST API로 신규 생성
+4. 확보한 리소스의 id를 ID 맵에 추가
+   - key: placeholder_in_graph 값
+   - value: 리소스 id
+   - 예시: {"generator_01_prompt": "w3sgb-..."}
+```
+
+### **Graph JSON 변수 치환 로직**
+
+```
+1. graph.file_path의 JSON 파일 로드
+2. JSON 내 @@...@@ 형식으로 감싸진 모든 플레이스홀더 탐색
+3. ID 맵(prompts/tools/mcps ID + llm 치환값)에서 해당 키를 찾아 값으로 교체
+4. 치환 완료된 JSON으로 Graph 생성(POST) 또는 업데이트(PUT)
+```
 
 ---
 
@@ -125,16 +150,16 @@ spec:
 ### Prompt
 | 동작 | Method | Path |
 |------|--------|------|
-| 생성 (id 미지정) | POST | `/api/v1/agent/inference-prompts` |
-| Import (id 지정) | POST | `/api/v1/agent/inference-prompts/import?prompt_uuid={id}` |
+| 이름으로 검색 | GET | `/api/v1/agent/inference-prompts?name={name}` |
+| 생성 | POST | `/api/v1/agent/inference-prompts` |
 | 업데이트 | PUT | `/api/v1/agent/inference-prompts/{id}` |
 | 삭제 | DELETE | `/api/v1/agent/inference-prompts/{id}` |
 
 ### Graph
 | 동작 | Method | Path |
 |------|--------|------|
-| 생성 (id 미지정) | POST | `/api/v1/agent/agents/graphs` |
-| Import (id 지정) | POST | `/api/v1/agent/agents/graphs/import?agent_id={id}` |
+| 이름으로 검색 | GET | `/api/v1/agent/agents/graphs?name={name}` |
+| 생성 | POST | `/api/v1/agent/agents/graphs` |
 | 업데이트 | PUT | `/api/v1/agent/agents/graphs/{id}` |
 | 삭제 | DELETE | `/api/v1/agent/agents/graphs/{id}` |
 | Stream 테스트 | POST | `/api/v1/agent/agents/graphs/stream` |
@@ -145,13 +170,6 @@ spec:
 | 생성 | POST | `/api/v1/agent/agents/apps` |
 | 삭제 | DELETE | `/api/v1/agent/agents/apps/{id}` |
 | Stream 테스트 | POST | `/api/v1/agent_gateway/{app_id}/stream` |
-
-### Import API 동작 규칙
-1. 해당 id가 **존재하지 않으면** → 신규 생성. 응답: `{detail: "Created", code: 1}`
-2. 해당 id가 존재하고 **내용이 일치하면** → 검증 통과. 응답: `{detail: "Validated", code: 1}`
-3. 해당 id가 존재하지만 **내용이 다르면** → 에러 발생
-   - `update-if-exists: true` → PUT으로 업데이트
-   - `update-if-exists: false` → skip (기존 ID 재사용)
 
 ---
 
@@ -172,8 +190,10 @@ spec:
 ### 5.3. 테스트 엔진 (Execution Logic)
 
 * **변수 치환 시스템**:
-  * `graph.file_path`의 JSON 내용을 읽어 `{prompt_name}` 등을 이전 단계에서 확보한 ID로 자동 Replace.
-  * 중복 방지를 위해 이름 뒤에 `{datetime}` 접미사 부여 (단, `force-create: true`인 경우).
+  * Prompts/Tools/MCPs는 GET으로 이름 검색 → 존재 시 `update-if-exists` 확인 후 PUT 또는 재사용, 없으면 POST 생성.
+  * 각 리소스의 id를 `{placeholder_in_graph: id}` 형태의 ID 맵으로 관리.
+  * LLM 항목은 `scenario.yaml`에서 직접 읽어 `{placeholder_in_graph: replace_to}` 형태로 ID 맵에 추가.
+  * Graph 생성/업데이트 시 JSON 내 `@@...@@` 플레이스홀더를 ID 맵의 값으로 일괄 치환.
 
 * **LLM Judge**:
   * `answer-judge`에 정의된 `question`을 전달.
@@ -192,28 +212,62 @@ spec:
 
 제공해주신 구조에 흐름 제어를 위한 필드를 유지합니다.
 
+
+
 ```yaml
 scenario_name: "Simple Chatbot E2E Test"
 graph:
   name: "[QA]simple_chatbot"
   file_path: "./scenarios/01_simple/graph_simple_chatbot.json"
   auto-delete: true
-  force-create: false
+  update-if-exists: false
 app:
   name: "[QA]simple_chatbot_app"
   auto-delete: true
+llms:
+  - placeholder_in_graph: gerator_01_serving_name 
+    replace_to: "GIP/gpt-4.1" #환경별로 달라질 수 있습니다.
+  - placeholder_in_graph: multiquery_01_serving_name 
+    replace_to: "GIP/gpt-4o" #환경별로 달라질 수 있습니다.
 prompts:
   - name: "[QA]generator_basic"
-    json_path: "./scenarios/01_simple/prompt_generator_basic.json" # 실제 body가 담긴 파일
-    auto-delete: true
+    placeholder_in_graph: generator_01_basic
+    json_path: "./scenarios/01_simple/prompt_generator_01_basic.json"
+    auto-delete: true 
+    update-if-exists: false
+tools:
+  - name: "tavily_search"
+    placeholder_in_graph: generator_01_tavily
+    json_path: "./scenarios/01_simple/tool_generator_01_tavily.json"
+    auto-delete: false
+    update-if-exists: false
+mcps:
+  - name: "cinema-search"
+    placeholder_in_graph: generator_01_cinema
+    json_path: "./scenarios/01_simple/mcp_generator_01_cinema.json"
+    auto-delete: false
+    update-if-exists: false
+knowledges:
+  - name: "test-knowledge"
+    placeholder_in_graph: retriever_01_repo
+    json_path: "./scenarios/01_simple/know_retriever_01_repo.json"
+    auto-delete: false
+    update-if-exists: false
+
+
 answer-judge:
-  questions:
-    - "안녕"
-  criteria:
+  request_json_path: "./scenarios/01_simple/request.json"
+  criteria: 
     - "인사말에 적절히 대답해야 함"
     - "HTTP Status 200"
 
 ```
+
+**필드 설명**
+- json_path: 생성 및 업데이트 할 때 사용할 request body가 담긴 json
+- placeholder_in_graph : graph.json에서 대치할 대상. value로 `@@gerator_01_serving_name@@ `이렇게 이중 골뱅이로 되어있어야 대치 가능합니다.
+- auto-delete: 테스트 완료 후 자동으로 삭제할지 여부
+- update-if-exists: 동일한 이름의 프롬프트가 이미 존재하면 update 할지 여부. default 는 false 입니다.
 
 ---
 
@@ -244,4 +298,3 @@ answer-judge:
 * 실패한 시나리오만 재실행하는 'Retry' 기능.
 * GitHub Actions와 연동하여 CI 단계에서 자동 실행.
 
-**다음 단계로 이 PRD를 바탕으로 Streamlit의 기본 레이아웃 코드 초안을 작성해 드릴까요?**

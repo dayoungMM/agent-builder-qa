@@ -1,30 +1,32 @@
 {
   "name": "[QA]simple_chatbot",
   "description": "[QA]simple_chatbot",
-  "tags": ["qa"],
-  "graphs": {
+  "tags": [
+    "qa"
+  ],
+  "graph": {
     "edges": [
       {
-        "id": "edge_in_gen",
+        "id": "3bbd24eb",
         "data": {
-          "send_to": "node_generator",
+          "send_to": "6422447f",
           "category": {
             "id": "",
             "category": "",
             "description": ""
           },
-          "condition": null,
           "edge_type": "none",
-          "send_from": "node_input",
-          "conditions": null
+          "send_from": "b153394d",
+          "condition_label": null
         },
         "type": "none",
+        "label": null,
         "style": {
           "stroke": "#C4CADA",
           "strokeWidth": 3
         },
-        "source": "node_input",
-        "target": "node_generator",
+        "source": "b153394d",
+        "target": "6422447f",
         "markerEnd": {
           "type": "arrowclosed",
           "color": "#C4CADA",
@@ -33,32 +35,33 @@
         },
         "marker_end": null,
         "marker_start": null,
+        "targetHandle": "gen_left",
         "reconnectable": null,
         "source_handle": null,
         "target_handle": null,
         "condition_label": null
       },
       {
-        "id": "edge_gen_out",
+        "id": "b7a9acf0",
         "data": {
-          "send_to": "node_output",
+          "send_to": "58b50b97",
           "category": {
-            "id": "",
-            "category": "",
+            "id": "gen_right",
+            "category": "gen_right",
             "description": ""
           },
-          "condition": null,
           "edge_type": "none",
-          "send_from": "node_generator",
-          "conditions": null
+          "send_from": "6422447f",
+          "condition_label": null
         },
         "type": "none",
+        "label": "gen_right",
         "style": {
           "stroke": "#C4CADA",
           "strokeWidth": 3
         },
-        "source": "node_generator",
-        "target": "node_output",
+        "source": "6422447f",
+        "target": "58b50b97",
         "markerEnd": {
           "type": "arrowclosed",
           "color": "#C4CADA",
@@ -67,17 +70,18 @@
         },
         "marker_end": null,
         "marker_start": null,
+        "sourceHandle": "gen_right",
         "reconnectable": null,
-        "source_handle": null,
+        "source_handle": "gen_right",
         "target_handle": null,
-        "condition_label": null
+        "condition_label": "gen_right"
       }
     ],
     "nodes": [
       {
-        "id": "node_input",
+        "id": "b153394d",
         "data": {
-          "id": "node_input",
+          "id": "b153394d",
           "name": "input__basic_1",
           "type": "input__basic",
           "input_keys": [
@@ -86,94 +90,100 @@
               "required": true,
               "description": "사용자의 질의",
               "fixed_value": null,
-              "keytable_id": "query_node_input",
+              "keytable_id": "query_b153394d",
               "object_type": "string"
             }
           ],
-          "description": "사용자 질의 입력"
+          "description": "사용자 질의 입력받았습니다... 🚀"
         },
         "type": "input__basic",
         "style": {},
         "measured": {
-          "width": 610,
-          "height": 598
+          "width": 600,
+          "height": 587
         },
         "position": {
           "x": 0,
           "y": 0
         },
-        "source_position": "left",
-        "target_position": "right"
+        "source_position": "right",
+        "target_position": "left"
       },
       {
-        "id": "node_generator",
+        "id": "58b50b97",
         "data": {
-          "id": "node_generator",
+          "id": "58b50b97",
+          "name": "output__relay_1",
+          "type": "output__relay",
+          "description": "응답 출력중입니다... 💬"
+        },
+        "type": "output__relay",
+        "style": {},
+        "measured": {
+          "width": 600,
+          "height": 361
+        },
+        "position": {
+          "x": 1700,
+          "y": 0
+        },
+        "source_position": "right",
+        "target_position": "left"
+      },
+      {
+        "id": "6422447f",
+        "data": {
+          "id": "6422447f",
           "name": "agent__generator_1",
           "type": "agent__generator",
+          "tools": [],
           "tool_ids": [],
-          "prompt_id": "{[QA]generator_basic}",
+          "prompt_id": "@@generator_01_prompt@@",
           "fewshot_id": "",
           "input_keys": [
             {
               "name": "query",
+              "required": true,
+              "description": "",
+              "fixed_value": null,
+              "keytable_id": "query_b153394d",
+              "object_type": "string"
+            },
+            {
+              "name": "context",
               "required": false,
               "description": "",
               "fixed_value": null,
-              "keytable_id": "query_node_input",
+              "keytable_id": "",
               "object_type": "string"
             }
           ],
-          "description": "답변 생성 중...",
+          "description": "Generator 수행중입니다...🤖",
           "output_keys": [
             {
               "name": "content",
-              "keytable_id": "content_node_generator"
+              "keytable_id": "content__6422447f"
             }
           ],
           "mcp_catalogs": [],
-          "serving_name": "GIP/ax4",
-          "serving_model": "GIP/ax4",
-          "model_parameters": {
-            "params": []
-          },
-          "tools": []
+          "serving_name": "@@gerator_01_serving_name@@",
+          "serving_model": "@@gerator_01_serving_name@@",
+          "model_parameters": null
         },
         "type": "agent__generator",
         "style": {},
+        "dragging": false,
         "measured": {
-          "width": 610,
-          "height": 829
+          "width": 600,
+          "height": 945
         },
         "position": {
-          "x": 690,
+          "x": 855,
           "y": 0
         },
-        "selected": false,
-        "source_position": "left",
-        "target_position": "right"
-      },
-      {
-        "id": "node_output",
-        "data": {
-          "id": "node_output",
-          "name": "output__chat_1",
-          "type": "output__chat",
-          "description": "응답 출력",
-          "format_string": "{{content_node_generator}}"
-        },
-        "type": "output__chat",
-        "style": {},
-        "measured": {
-          "width": 610,
-          "height": 648
-        },
-        "position": {
-          "x": 1395,
-          "y": 0
-        },
-        "source_position": "left",
-        "target_position": "right"
+        "selected": true,
+        "source_position": "right",
+        "target_position": "left"
       }
     ]
   }

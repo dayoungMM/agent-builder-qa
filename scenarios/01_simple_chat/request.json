@@ -1,0 +1,13 @@
+{
+	"input": {
+		"messages": [
+			{
+				"content": "Hi",
+				"type": "human"
+			}
+		],
+		"additional_kwargs": {
+		}
+	},
+	"config": {}
+}

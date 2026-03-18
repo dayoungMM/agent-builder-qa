@@ -35,10 +35,9 @@ skills 폴더(`.claude/skills/adxp-agent-e2e-test-helper`) 안에 `echoapi.json`
 - **없으면** → 사용자에게 안내:
   ```
   .claude/skills/ 폴더에 echoapi.json (Postman/EchoAPI export 파일)이 없습니다.
-  Graph 생성 API의 request body 구조를 파악하기 위해 필요합니다.
-  해당 파일을 .claude/skills/ 폴더에 넣어주시겠어요?
+  echoapi.json 파일이 있으면 .claude/skills/ 폴더에 넣어주시고, 없으면 skip이라고 해주세요.
   ```
-  파일이 추가되면 계속 진행.
+  파일이 추가되거나 skip이라고 사용자가 입력하면 계속 진행.
 
 ---
 
@@ -62,28 +61,64 @@ skills 폴더(`.claude/skills/adxp-agent-e2e-test-helper`) 안에 `echoapi.json`
 
 ---
 
-### Step 3: 연관 파일 필요 여부 확인
+### Step 3: 연관 파일 생성 및 graph.json 플레이스홀더 치환
 
 생성된 `graph.json`을 읽어 아래 필드 값을 확인한다.
 
-| 필드 | 비어있지 않으면 |
-|------|----------------|
-| `prompt_id` | `prompt.json` 생성 필요 |
-| `tool_id` | `tool.json` 생성 필요 |
-| `mcp_catalogs` | `mcp.json` 생성 필요 |
+| graph.json 필드 | 비어있지 않으면 | 생성할 파일 |
+|------|----------------|------------|
+| `serving_name` | llm 치환 필요 | JSON 파일 없음 (scenario.yaml llms 섹션에만 추가) |
+| `prompt_id` | `prompt.json` 생성 필요 | `prompt_{identifier}.json` |
+| `tool_ids` | `tool.json` 생성 필요 | `tool_{identifier}.json` |
+| `mcp_catalogs[].id` | `mcp.json` 생성 필요 | `mcp_{identifier}.json` |
+| `repo_id` | `knowledge.json` 생성 필요 | `know_{identifier}.json` |
 
-비어있지 않은 필드가 있으면 사용자에게 안내:
+**3-1. 플레이스홀더 치환**
+
+감지된 각 값을 `@@{identifier}@@` 형식으로 교체하고, graph.json을 업데이트한다.
+
+- `identifier` 규칙: 해당 노드의 `name` 필드(예: `agent__generator_1`)를 기반으로 자동 생성
+  - prompt: `prompt_{node_name}` → 예: `@@prompt_agent__generator_1@@`
+  - tool: `tool_{node_name}_{idx}` (tool_ids는 배열이므로 idx 포함)
+  - mcp: `mcp_{catalog_name}` (mcp_catalogs의 name 필드 사용)
+  - knowledge: `know_{node_name}`
+  - llm serving_name: `llm_{node_name}` → 예: `@@llm_agent__generator_1@@`
+
+사용자에게 변경 내역을 아래 형식으로 알린다:
 
 ```
-graph.json을 읽었습니다. 아래 파일 생성이 필요합니다:
-- prompt.json (prompt_id 필드 감지)
-- tool.json   (tool_id 필드 감지)      ← 해당되는 것만 표시
-- mcp.json    (mcp_catalogs 필드 감지)
+graph.json 플레이스홀더 치환 완료:
 
-각각 어떤 값을 넣으시겠어요?
+[LLM]
+- "serving_name": "GIP/gpt-4.1"  →  "serving_name": "@@llm_agent__generator_1@@"
+
+[Prompt]
+- "prompt_id": "6f772e24-..."  →  "prompt_id": "@@prompt_agent__generator_1@@"
+
+[Tool]
+- "tool_ids": ["7d141228-..."]  →  "tool_ids": ["@@tool_agent__generator_1_0@@"]
+
+[MCP]
+- mcp_catalogs[0].id: "400a47a5-..."  →  "@@mcp_takeoff_news@@"
+
+[Knowledge]
+- "repo_id": "557daeb4-..."  →  "repo_id": "@@know_agent__retriever_1@@"
 ```
 
-`echoapi.json`에서 각각의 생성 API request body 예시를 찾아 옵션으로 제시하고, 없으면 직접 입력 요청.
+**3-2. 연관 JSON 파일 생성**
+
+llm은 JSON 파일 생성 없이 scenario.yaml llms 섹션에 추가할 정보만 메모.
+나머지(prompt, tool, mcp, knowledge)는 각 JSON 파일을 생성해야 한다.
+
+`echoapi.json`에서 각 리소스 생성 API의 request body 예시를 찾아 옵션으로 제시하고, 없으면 직접 입력 요청.
+
+```
+아래 파일 생성이 필요합니다. 각각 어떤 값을 넣으시겠어요?
+- prompt_agent__generator_1.json  (prompt_id 감지)   ← 해당되는 것만 표시
+- tool_agent__generator_1_0.json  (tool_ids 감지)    ← 해당되는 것만 표시
+- mcp_takeoff_news.json           (mcp_catalogs 감지) ← 해당되는 것만 표시
+- know_agent__retriever_1.json    (repo_id 감지)      ← 해당되는 것만 표시
+```
 
 사용자 입력을 받아 해당 JSON 파일들 생성.
 
@@ -91,11 +126,12 @@ graph.json을 읽었습니다. 아래 파일 생성이 필요합니다:
 
 ### Step 4: scenario.yaml 만들기
 
-**4-1. graph / app / prompts 섹션 자동 구성**
+**4-1. graph / app / llm / prompts 섹션 자동 구성**
 
 - `graph` 섹션: `graph.json`의 내용 기반으로 채움
 - `app.name`: graph name과 동일하게 설정
-- `prompts`: `prompt.json`이 생성된 경우에만 섹션 추가
+- `llms` 섹션: Step 3에서 치환된 `@@llm_...@@` 플레이스홀더를 기반으로 항목 구성. `replace_to` 값은 원본 `serving_name` 값으로 채우되 사용자에게 확인 (환경마다 다를 수 있음)
+- `prompts` / `tools` / `mcps` / `knowledges`: Step 3에서 생성된 JSON 파일이 있는 경우에만 섹션 추가. `placeholder_in_graph`는 Step 3에서 결정된 identifier 사용
 
 모든 name 값에 `[QA]` 접두사 필수.
 
@@ -132,28 +168,32 @@ answer-judge 내용을 알려주세요.
 
 ## 시나리오 YAML 구조 (참고)
 
-> **[중요] id 필드 규칙**
-> - `graph`, `prompts`, `tool`, `mcp` 섹션에는 반드시 UUID 형식의 `id` 필드를 지정해야 합니다.
-> - `id`가 있으면 Import API를 사용하여 해당 UUID로 리소스를 생성/검증합니다.
-> - `app`은 id 필드 없이 name만 지정합니다 (Import API 미사용).
+> **[중요] 리소스 처리 방식**
+> - `graph`, `prompts`, `tool`, `mcp`는 **이름(name)으로 GET 검색** → 존재하면 `update-if-exists` 확인, 없으면 POST 생성.
+> - `id` 필드는 사용하지 않습니다.
+> - `llm` 항목은 API 호출 없이 `scenario.yaml` 값을 그대로 치환 맵에 추가합니다.
+> - graph JSON 내 `@@...@@` 플레이스홀더는 prompts/tools/mcps ID + llm 치환값 맵으로 교체됩니다.
 
 ```yaml
 scenario_name: "<시나리오 이름>"
 
 graph:
-  id: "<uuid>"                              # 필수: Import API에 사용할 고정 UUID
   name: "[QA]<graph_name>"
   file_path: "./scenarios/<folder>/graph_<name>.json"
   auto-delete: true
   update-if-exists: false
 
-app:                                        # id 없음 — Create API만 사용
+app:
   name: "[QA]<app_name>"
   auto-delete: true
 
+llm:                                        # graph JSON의 @@...@@ 플레이스홀더 직접 치환
+  - placeholder_in_graph: <placeholder_key>
+    replace_to: "<serving_name>"            # 예: "GIP/gpt-4o"
+
 prompts:                                    # prompt.json이 있는 경우만
-  - id: "<uuid>"                            # 필수: Import API에 사용할 고정 UUID
-    name: "[QA]<prompt_name>"
+  - name: "[QA]<prompt_name>"
+    placeholder_in_graph: <placeholder_key>
     json_path: "./scenarios/<folder>/prompt_<name>.json"
     auto-delete: true
     update-if-exists: false
@@ -166,13 +206,12 @@ answer-judge:
     - "HTTP Status 200"
 ```
 
-### Import API 동작 규칙
-| 상황 | 결과 |
+### 리소스 처리 로직 (Prompts / Tools / MCPs 공통)
+| 상황 | 동작 |
 |------|------|
-| id 미존재 | 신규 생성 (`detail: "Created"`) |
-| id 존재 + 내용 일치 | 검증 통과 (`detail: "Validated"`) |
-| id 존재 + 내용 불일치 + `update-if-exists: true` | PUT으로 업데이트 |
-| id 존재 + 내용 불일치 + `update-if-exists: false` | skip (기존 ID 재사용) |
+| GET 검색 결과 없음 | POST로 신규 생성 |
+| GET 검색 결과 있음 + `update-if-exists: true` | PUT으로 업데이트 |
+| GET 검색 결과 있음 + `update-if-exists: false` | 기존 리소스 재사용 (업데이트 생략) |
 
 ---
 
