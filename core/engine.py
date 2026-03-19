@@ -25,6 +25,13 @@ from core.models import (
 )
 
 
+class StreamError(Exception):
+    """SSE 스트림 내 에러 이벤트 감지 시 발생."""
+    def __init__(self, message: str, raw_response: str = ""):
+        super().__init__(message)
+        self.raw_response = raw_response
+
+
 def load_scenario_from_file(path: Path) -> Scenario:
     """Load a Scenario model from a YAML file."""
     with path.open("r", encoding="utf-8") as f:
@@ -205,6 +212,7 @@ class ScenarioEngine:
         try:
             data = json.loads(raw)
             for key_path in [
+                ["final_result"],
                 ["content"],
                 ["text"],
                 ["delta", "content"],
@@ -223,16 +231,70 @@ class ScenarioEngine:
             return raw
         return ""
 
-    def _call_stream(self, url: str, payload: dict) -> tuple[str, int]:
-        """스트림 API 호출 → (전체 응답 텍스트, HTTP 상태 코드) 반환."""
+    def _call_stream(self, url: str, payload: dict, headers: dict = None) -> tuple[str, int, str]:
+        """스트림 API 호출 → (전체 응답 텍스트, HTTP 상태 코드, 원본 SSE 텍스트) 반환.
+
+        SSE 스트림에서 `event: error` 또는 data에 "error" 키가 포함된 경우
+        StreamError를 발생시킵니다.
+        """
         full_response = ""
+        raw_lines: list[str] = []
         status_code = 0
-        with self.client.stream("POST", url, json=payload) as resp:
+        current_event = "data"
+        stream_error: str | None = None
+
+        with self.client.stream("POST", url, json=payload, headers=headers or {}) as resp:
             status_code = resp.status_code
             resp.raise_for_status()
             for line in resp.iter_lines():
-                full_response += self._parse_stream_line(line)
-        return full_response, status_code
+                raw_lines.append(line)
+                if line.startswith("event:"):
+                    current_event = line.removeprefix("event:").strip()
+                elif line.startswith("data:"):
+                    raw = line.removeprefix("data:").strip()
+                    if current_event == "error":
+                        try:
+                            data = json.loads(raw)
+                            stream_error = data.get("message", raw)
+                        except json.JSONDecodeError:
+                            stream_error = raw
+                    else:
+                        try:
+                            data = json.loads(raw)
+                            if isinstance(data, dict) and "error" in data and not stream_error:
+                                stream_error = data["error"]
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                        full_response += self._parse_stream_line(line)
+                    current_event = "data"
+
+        raw_text = "\n".join(raw_lines)
+        if stream_error:
+            raise StreamError(stream_error, raw_response=raw_text)
+        return full_response, status_code, raw_text
+
+    def _get_app_apikey(self, app_id: str) -> str:
+        """GET /api/v1/agent/agents/apps/{app_id}/apikeys 로 API key 조회."""
+        resp = self.client.get(
+            f"{self.base_url}/api/v1/agent/agents/apps/{app_id}/apikeys"
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        items = (
+            data.get("items")
+            or data.get("data")
+            or data.get("results")
+            or (data if isinstance(data, list) else [])
+        )
+        if not items:
+            raise ValueError(f"No API keys found for app {app_id}")
+        item = items[0]
+        if isinstance(item, str):
+            return item
+        key = item.get("key") or item.get("api_key") or item.get("apikey")
+        if not key:
+            raise ValueError(f"API key field not found in response: {item}")
+        return key
 
     def _find_app_by_name(self, name: str) -> Optional[dict]:
         """GET /api/v1/agent/agents/apps?name={name} 으로 App을 검색합니다."""
@@ -265,6 +327,23 @@ class ScenarioEngine:
         - Created / Validated → resource_id 반환
         - 충돌(HTTP 에러): update_if_exists=True → PUT 업데이트, False → skip
         """
+        def _extract_response_message(response: httpx.Response) -> str:
+            # Try to extract a friendly message from common JSON shapes.
+            try:
+                data = response.json()
+                if isinstance(data, dict):
+                    return (
+                        data.get("detail")
+                        or data.get("message")
+                        or data.get("error")
+                        or str(data)
+                    )
+            except Exception:
+                pass
+            # Fallback to raw text (may be empty).
+            text = (response.text or "").strip()
+            return text if text else response.reason_phrase or ""
+
         try:
             resp = self.client.post(import_url, params={id_param: resource_id}, json=payload)
             resp.raise_for_status()
@@ -274,13 +353,26 @@ class ScenarioEngine:
             if e.response.status_code == 405 and update_if_exists:
                 self._notify(f"  → 충돌, PUT 업데이트: {resource_id}", "warning")
                 put_resp = self.client.put(put_url, json=payload)
-                put_resp.raise_for_status()
+                try:
+                    put_resp.raise_for_status()
+                except httpx.HTTPStatusError as put_e:
+                    msg = _extract_response_message(put_e.response)
+                    raise httpx.HTTPStatusError(
+                        f"PUT failed ({put_e.response.status_code}): {msg}",
+                        request=put_e.request,
+                        response=put_e.response,
+                    ) from put_e
             else:
-                e.response.raise_for_status()
+                msg = _extract_response_message(e.response)
+                raise httpx.HTTPStatusError(
+                    f"Import failed ({e.response.status_code}): {msg}",
+                    request=e.request,
+                    response=e.response,
+                ) from e
         return resource_id
 
-    def _stream_graph(self, graph_id: str, query: str) -> str:
-        """Graph stream API 호출."""
+    def _stream_graph(self, graph_id: str, query: str) -> tuple[str, str]:
+        """Graph stream API 호출 → (파싱된 텍스트, 원본 SSE 텍스트) 반환."""
         payload = {
             "graph_id": graph_id,
             "input_data": {
@@ -288,13 +380,13 @@ class ScenarioEngine:
                 "additional_kwargs": {},
             },
         }
-        text, _ = self._call_stream(
+        text, _, raw = self._call_stream(
             f"{self.base_url}/api/v1/agent/agents/graphs/stream", payload
         )
-        return text
+        return text, raw
 
-    def _stream_app(self, app_id: str, query: str) -> str:
-        """App(agent_gateway) stream API 호출."""
+    def _stream_app(self, app_id: str, query: str, api_key: str) -> tuple[str, str]:
+        """App(agent_gateway) stream API 호출 → (파싱된 텍스트, 원본 SSE 텍스트) 반환."""
         payload = {
             "input": {
                 "messages": [{"content": query, "type": "human"}],
@@ -302,10 +394,12 @@ class ScenarioEngine:
             },
             "config": {},
         }
-        text, _ = self._call_stream(
-            f"{self.base_url}/api/v1/agent_gateway/{app_id}/stream", payload
+        text, _, raw = self._call_stream(
+            f"{self.base_url}/api/v1/agent_gateway/{app_id}/stream",
+            payload,
+            headers={"Authorization": f"Bearer {api_key}"},
         )
-        return text
+        return text, raw
 
     # ── Prompt Stage ──────────────────────────────
 
@@ -427,7 +521,7 @@ class ScenarioEngine:
                     q_start = time.time()
                     self._notify(f"[Graph] 스트림 테스트: '{question}'")
                     try:
-                        response_text = self._stream_graph(graph_id, question)
+                        response_text, raw_response = self._stream_graph(graph_id, question)
                         judge_result = self.judge.judge(
                             question=question,
                             response=response_text,
@@ -437,9 +531,18 @@ class ScenarioEngine:
                             step=f"Graph Stream [{question}]",
                             status=StepStatus.PASS if judge_result.status == JudgeStatus.PASS else StepStatus.FAIL,
                             request={"query": question},
-                            response=response_text,
+                            raw_response=raw_response,
                             elapsed_time=time.time() - q_start,
                             judge_result=judge_result,
+                        ))
+                    except StreamError as e:
+                        results.append(StepResult(
+                            step=f"Graph Stream [{question}]",
+                            status=StepStatus.FAIL,
+                            request={"query": question},
+                            raw_response=e.raw_response,
+                            error=str(e),
+                            elapsed_time=time.time() - q_start,
                         ))
                     except Exception as e:
                         traceback.print_exc()
@@ -503,7 +606,7 @@ class ScenarioEngine:
                     f"{self.base_url}/api/v1/agent/agents/apps", json=payload
                 )
                 resp.raise_for_status()
-                app_id = resp.json()["id"]
+                app_id = resp.json()["data"]["app_id"]
                 self._notify(f"[App] 배포 완료: {app_id}")
 
             results.append(StepResult(
@@ -514,11 +617,12 @@ class ScenarioEngine:
             ))
 
             if answer_judge and app_id:
+                api_key = self._get_app_apikey(app_id)
                 for question in answer_judge.questions:
                     q_start = time.time()
                     self._notify(f"[App] 스트림 테스트: '{question}'")
                     try:
-                        response_text = self._stream_app(app_id, question)
+                        response_text, raw_response = self._stream_app(app_id, question, api_key)
                         judge_result = self.judge.judge(
                             question=question,
                             response=response_text,
@@ -528,9 +632,18 @@ class ScenarioEngine:
                             step=f"App Stream [{question}]",
                             status=StepStatus.PASS if judge_result.status == JudgeStatus.PASS else StepStatus.FAIL,
                             request={"query": question},
-                            response=response_text,
+                            raw_response=raw_response,
                             elapsed_time=time.time() - q_start,
                             judge_result=judge_result,
+                        ))
+                    except StreamError as e:
+                        results.append(StepResult(
+                            step=f"App Stream [{question}]",
+                            status=StepStatus.FAIL,
+                            request={"query": question},
+                            raw_response=e.raw_response,
+                            error=str(e),
+                            elapsed_time=time.time() - q_start,
                         ))
                     except Exception as e:
                         traceback.print_exc()
@@ -543,11 +656,19 @@ class ScenarioEngine:
 
         except Exception as e:
             traceback.print_exc()
-            self._notify(f"[App] 오류: {e}", "error")
+            if isinstance(e, httpx.HTTPStatusError):
+                try:
+                    body = e.response.json()
+                except Exception:
+                    body = e.response.text
+                msg = f"{e} | response body: {body}"
+            else:
+                msg = str(e)
+            self._notify(f"[App] 오류: {msg}", "error")
             results.append(StepResult(
                 step=step_name,
                 status=StepStatus.ERROR,
-                error=str(e),
+                error=msg,
                 elapsed_time=time.time() - start,
             ))
 
@@ -566,6 +687,7 @@ class ScenarioEngine:
         results: list[StepResult] = []
 
         def _delete(label: str, url: str):
+            # Normal delete (DELETE)
             try:
                 self._notify(f"[Cleanup] {label} 삭제 중...")
                 resp = self.client.delete(url)
@@ -615,7 +737,8 @@ class ScenarioEngine:
             if step.status == StepStatus.ERROR:
                 self._finalize(result, prompt_pairs, scenario, "", "")
                 return result
-            prompt_vars[prompt_cfg.name] = prompt_id
+            placeholder_key = prompt_cfg.placeholder_in_graph or prompt_cfg.name
+            prompt_vars[placeholder_key] = prompt_id
             prompt_pairs.append((prompt_cfg, prompt_id))
 
         # 2. Graph Stage
@@ -634,13 +757,29 @@ class ScenarioEngine:
 
         # 3. App Stage
         app_id = ""
-        if scenario.app and graph_id:
+        graph_stream_steps = [
+            s for s in result.steps if s.step.startswith("Graph Stream [")
+        ]
+        graph_stream_all_pass = all(s.status == StepStatus.PASS for s in graph_stream_steps)
+        can_deploy_app = bool(graph_id) and (not graph_stream_steps or graph_stream_all_pass)
+
+        if scenario.app and graph_id and can_deploy_app:
             app_id, app_steps = self.run_app_stage(
                 app_cfg=scenario.app,
                 graph_id=graph_id,
                 answer_judge=scenario.answer_judge,
             )
             result.steps.extend(app_steps)
+        elif scenario.app and graph_id and not can_deploy_app:
+            result.steps.append(StepResult(
+                step=f"App: {scenario.app.name}",
+                status=StepStatus.SKIP,
+                error="Skipped because Graph Stream did not fully pass.",
+            ))
+            self._notify(
+                "[App] Graph Stream 검증 실패로 App 배포를 건너뜁니다.",
+                "warning",
+            )
 
         # 4. Cleanup + finalize
         self._finalize(result, prompt_pairs, scenario, graph_id, app_id)
