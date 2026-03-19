@@ -136,6 +136,11 @@ answer-judge 내용을 알려주세요.
 > - `graph`, `prompts`, `tool`, `mcp` 섹션에는 반드시 UUID 형식의 `id` 필드를 지정해야 합니다.
 > - `id`가 있으면 Import API를 사용하여 해당 UUID로 리소스를 생성/검증합니다.
 > - `app`은 id 필드 없이 name만 지정합니다 (Import API 미사용).
+> - **`id`가 없는 섹션을 발견하면**: 터미널에서 UUID4를 생성하여 scenario.yaml에 추가한 뒤 진행한다.
+>   ```bash
+>   python3 -c "import uuid; print(uuid.uuid4())"
+>   ```
+>   graph, prompts 각각에 대해 UUID를 별도로 생성한다.
 
 ```yaml
 scenario_name: "<시나리오 이름>"

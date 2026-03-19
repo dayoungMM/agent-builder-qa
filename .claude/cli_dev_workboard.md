@@ -36,6 +36,9 @@
 - [x] `core/models.py` 기반으로 시나리오 YAML 구조를 로드/검증하는 헬퍼 함수 구현 되어있는지 확인하기. 
 - [x] `core/engine.py`의 Scenario Pipeline을 단일 시나리오 단위로 호출하는 함수 정의되어있는지 확인하기
 - [x] Prompt → Graph → App → Cleanup 각 단계별 실행 결과/예외를 캡처하고 상태를 반환하는 인터페이스 설계
+- [x] Cleanup Stage에서 `auto_delete` 기반 App → Graph → Prompt `DELETE` 호출 위치 확인
+- [x] Cleanup Stage는 `DELETE`만 수행하도록 유지 (`/hard-delete` 후속 호출 제거)
+- [x] Graph Stream 결과가 모두 PASS일 때만 App 배포 실행(미충족 시 App 단계 SKIP)
 - [x] `app_cli/main.py`에서 다수의 시나리오를 순차 실행하면서 개별/전체 결과를 집계하는 루프 구현
 - [x] 실행 중단/예외 발생 시 남은 시나리오 처리 정책 정의(개별 시나리오는 ERROR 처리 후 나머지 시나리오는 계속 실행)
 
@@ -46,6 +49,7 @@
 - [x] 전체 실행 결과 요약 출력 (총 시나리오 수, 성공/실패 개수, 실패 목록)
 - [x] 하나 이상 실패 시 프로세스 exit code `1`, 전부 성공 시 exit code `0` 반환 구현
 - [x] 예외/예기치 못한 에러 발생 시 로그 및 exit code 정책 정의 (예: 포맷팅된 에러 메시지 후 `1` 반환)
+- [x] Import/PUT 실패 시 HTTP 응답의 메시지(detail/message/text)를 예외 메시지에 포함
 
 ### 2.6 K8s CronJob / CI Integration
 

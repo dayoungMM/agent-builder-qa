@@ -1,8 +1,8 @@
 {
   "name": "[QA]simple_chatbot",
   "description": "[QA]simple_chatbot",
-  "tags": ["qa"],
-  "graphs": {
+  "tags": [],
+  "graph": {
     "edges": [
       {
         "id": "edge_in_gen",
@@ -121,6 +121,14 @@
               "description": "",
               "fixed_value": null,
               "keytable_id": "query_node_input",
+              "object_type": "string"
+            },
+            {
+              "name": "context",
+              "required": false,
+              "description": "",
+              "fixed_value": null,
+              "keytable_id": "",
               "object_type": "string"
             }
           ],

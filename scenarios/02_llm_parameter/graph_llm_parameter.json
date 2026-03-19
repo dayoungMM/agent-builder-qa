@@ -1,8 +1,8 @@
 {
   "name": "[QA]graph_llm_parameter",
   "description": "[QA]graph_llm_parameter",
-  "tags": ["qa"],
-  "graphs": {
+  "tags": [],
+  "graph": {
     "edges": [
       {
         "id": "c254ca56",

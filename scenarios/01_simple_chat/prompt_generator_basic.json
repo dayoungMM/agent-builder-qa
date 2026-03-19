@@ -1,26 +1,34 @@
 {
+    
   "name": "[QA]generator_basic",
   "release": true,
-  "desc": "Simple chatbot generator prompt for QA integration test",
+  "desc": "Basic generator prompt for QA integration test",
   "messages": [
-    {
-      "mtype": 1,
-      "message": "You are a friendly and helpful AI assistant. Be concise and natural in your responses."
-    },
-    {
-      "mtype": 2,
-      "message": "{{query}}"
-    }
+      {
+          "mtype": 1,
+          "message": "You are a helpful AI assistant.\nContext: {{context}}"
+      },
+      {
+          "mtype": 2,
+          "message": "Question: {{query}}\nAnswer:"
+      }
   ],
   "variables": [
-    {
-      "variable": "query",
-      "validation_flag": false,
-      "validation": "",
-      "token_limit_flag": false,
-      "token_limit": 0
-    }
+      {
+          "variable": "context",
+          "validation_flag": false,
+          "validation": "",
+          "token_limit_flag": false,
+          "token_limit": 0
+      },
+      {
+          "variable": "query",
+          "validation_flag": false,
+          "validation": "",
+          "token_limit_flag": false,
+          "token_limit": 0
+      }
   ],
-  "tags": ["qa"],
+  "tags": [],
   "ptype": 1
 }
