@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 
 _DEFAULT_ADXP_ENDPOINT = (
-    "http://agent-gateway.aiplatform.svc.cluster.local/api/v1/agent_gateway"
+    "http://agent-gateway.aiplatform.svc.cluster.local/api/v1/gateway/chat/completion"
 )
 _DEFAULT_BASE_URL = "http://agent-backend.aiplatform.svc.cluster.local"
 
@@ -154,10 +154,10 @@ with st.sidebar:
             placeholder="serving-name",
         )
         st.session_state.llm_api_key = st.text_input(
-            "API Key",
+            "Model Gateway API Key",
             value=st.session_state.llm_api_key,
             type="password",
-            placeholder="sk-...",
+            placeholder="Model Gateway에서 발급받은 API Key",
         )
     else:
         _default_model = (
@@ -471,13 +471,12 @@ if st.session_state.results:
                         st.caption(f"{step.elapsed_time:.2f}s")
 
                 if step.response:
-                    st.text_area(
-                        "Response",
-                        value=step.response,
-                        height=80,
-                        disabled=True,
-                        key=f"resp_{r.scenario_name}_{step.step}",
-                    )
+                    with st.expander("Response", expanded=False):
+                        st.markdown(step.response)
+
+                if step.raw_response:
+                    with st.expander("Raw SSE Events", expanded=False):
+                        st.code(step.raw_response, language="text")
 
                 if step.judge_result:
                     badge = (

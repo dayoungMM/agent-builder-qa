@@ -27,6 +27,7 @@ class JudgeResult(BaseModel):
 class PromptConfig(BaseModel):
     id: Optional[str] = None
     name: str
+    placeholder_in_graph: Optional[str] = Field(default=None, alias="placeholder-in-graph")
     json_path: str
     auto_delete: bool = Field(default=False, alias="auto-delete")
     update_if_exists: bool = Field(default=False, alias="update-if-exists")
@@ -72,6 +73,7 @@ class StepResult(BaseModel):
     status: StepStatus
     request: Optional[dict] = None
     response: Optional[str] = None
+    raw_response: Optional[str] = None
     elapsed_time: Optional[float] = None
     judge_result: Optional[JudgeResult] = None
     error: Optional[str] = None

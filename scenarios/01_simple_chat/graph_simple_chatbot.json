@@ -1,9 +1,7 @@
 {
   "name": "[QA]simple_chatbot",
   "description": "[QA]simple_chatbot",
-  "tags": [
-    "qa"
-  ],
+  "tags": [],
   "graph": {
     "edges": [
       {
@@ -143,10 +141,10 @@
           "input_keys": [
             {
               "name": "query",
-              "required": true,
+              "required": false,
               "description": "",
               "fixed_value": null,
-              "keytable_id": "query_b153394d",
+              "keytable_id": "",
               "object_type": "string"
             },
             {

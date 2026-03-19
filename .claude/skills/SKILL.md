@@ -196,6 +196,7 @@ For **performance optimization**, read:
 
 | Skill | Covers |
 |-------|--------|
+| [using-playwright](skills/using-playwright/SKILL.md) | Streamlit 앱 로그인, 실행, 화면 에러 수집 (Playwright MCP) |
 | [building-streamlit-chat-ui](skills/building-streamlit-chat-ui/SKILL.md) | Chat interfaces, streaming responses, message history |
 | [building-streamlit-dashboards](skills/building-streamlit-dashboards/SKILL.md) | KPI cards, metrics, dashboard layouts |
 | [building-streamlit-multipage-apps](skills/building-streamlit-multipage-apps/SKILL.md) | Page structure, navigation, shared state |

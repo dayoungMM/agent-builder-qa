@@ -1,6 +1,7 @@
 scenario_name: "LLM Parameter E2E Test"
 
 graph:
+  id: f38508d4-44b3-4550-8855-cde36452b97f
   name: "[QA]graph_llm_parameter"
   file_path: "./scenarios/02_llm_parameter/graph_llm_parameter.json"
   auto-delete: true
@@ -11,7 +12,8 @@ app:
   auto-delete: true
 
 prompts:
-  - name: "[QA]prompt_llm_parameter"
+  - id: 7edac103-d91f-4f43-9cc2-901db79356fb
+    name: "[QA]prompt_llm_parameter"
     json_path: "./scenarios/02_llm_parameter/prompt_llm_parameter.json"
     auto-delete: true
     update-if-exists: false

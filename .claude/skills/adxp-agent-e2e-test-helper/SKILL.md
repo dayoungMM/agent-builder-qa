@@ -168,11 +168,15 @@ answer-judge 내용을 알려주세요.
 
 ## 시나리오 YAML 구조 (참고)
 
-> **[중요] 리소스 처리 방식**
-> - `graph`, `prompts`, `tool`, `mcp`는 **이름(name)으로 GET 검색** → 존재하면 `update-if-exists` 확인, 없으면 POST 생성.
-> - `id` 필드는 사용하지 않습니다.
-> - `llm` 항목은 API 호출 없이 `scenario.yaml` 값을 그대로 치환 맵에 추가합니다.
-> - graph JSON 내 `@@...@@` 플레이스홀더는 prompts/tools/mcps ID + llm 치환값 맵으로 교체됩니다.
+> **[중요] id 필드 규칙**
+> - `graph`, `prompts`, `tool`, `mcp` 섹션에는 반드시 UUID 형식의 `id` 필드를 지정해야 합니다.
+> - `id`가 있으면 Import API를 사용하여 해당 UUID로 리소스를 생성/검증합니다.
+> - `app`은 id 필드 없이 name만 지정합니다 (Import API 미사용).
+> - **`id`가 없는 섹션을 발견하면**: 터미널에서 UUID4를 생성하여 scenario.yaml에 추가한 뒤 진행한다.
+>   ```bash
+>   python3 -c "import uuid; print(uuid.uuid4())"
+>   ```
+>   graph, prompts 각각에 대해 UUID를 별도로 생성한다.
 
 ```yaml
 scenario_name: "<시나리오 이름>"
