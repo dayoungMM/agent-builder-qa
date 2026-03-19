@@ -9,7 +9,8 @@ app:
   name: "[QA]simple_chatbot_app"
   auto-delete: true
 prompts:
-  - name: "[QA]generator_basic"
+  - id: 5920682c-4d0f-411d-a38e-645317a6802e
+    name: "[QA]generator_basic"
     placeholder_in_graph: generator_01_prompt
     json_path: "./scenarios/01_simple_chat/prompt_generator_basic.json"
     auto-delete: true

@@ -136,7 +136,7 @@
           "type": "agent__generator",
           "tools": [],
           "tool_ids": [],
-          "prompt_id": "@@generator_01_prompt@@",
+          "prompt_id": "5920682c-4d0f-411d-a38e-645317a6802e",
           "fewshot_id": "",
           "input_keys": [
             {
@@ -164,8 +164,8 @@
             }
           ],
           "mcp_catalogs": [],
-          "serving_name": "@@gerator_01_serving_name@@",
-          "serving_model": "@@gerator_01_serving_name@@",
+          "serving_name": "GIP/gpt-4.1",
+          "serving_model": "GIP/gpt-4.1",
           "model_parameters": null
         },
         "type": "agent__generator",
