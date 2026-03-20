@@ -291,201 +291,288 @@ if not st.session_state.scenario_files:
 st.title("🧪 Agent Builder QA")
 st.caption("YAML 시나리오 기반 E2E 테스트 자동화 도구")
 
+tab_runner, tab_editor = st.tabs(["▶ Test Runner", "📝 Scenario Editor"])
+
 # ──────────────────────────────────────────────────────────────────────────────
-# Scenario Control
+# Tab 1: Test Runner
 # ──────────────────────────────────────────────────────────────────────────────
 
-st.subheader("Scenario Control")
+with tab_runner:
 
-btn_col1, btn_col2 = st.columns([1, 5])
-with btn_col1:
-    if st.button("🔄 Reload", use_container_width=True):
-        count = load_scenario_list()
-        st.toast(f"{count}개 시나리오 로드됨")
+    st.subheader("Scenario Control")
 
-scenario_labels = {
-    f: get_scenario_label(f)
-    for f in st.session_state.scenario_files
-}
+    btn_col1, btn_col2 = st.columns([1, 5])
+    with btn_col1:
+        if st.button("🔄 Reload", use_container_width=True):
+            count = load_scenario_list()
+            st.toast(f"{count}개 시나리오 로드됨")
 
-selected_paths: list[str] = st.multiselect(
-    "실행할 시나리오",
-    options=list(scenario_labels.keys()),
-    format_func=lambda x: scenario_labels.get(x, x),
-    default=list(scenario_labels.keys()),
-    disabled=st.session_state.running,
-)
+    scenario_labels = {
+        f: get_scenario_label(f)
+        for f in st.session_state.scenario_files
+    }
 
-run_col1, run_col2, run_col3 = st.columns([2, 2, 1])
-with run_col1:
-    run_selected_btn = st.button(
-        "▶ Run Selected",
-        disabled=st.session_state.running or not selected_paths,
-        use_container_width=True,
-        type="primary",
-    )
-with run_col2:
-    run_all_btn = st.button(
-        "⏩ Run All",
-        disabled=st.session_state.running or not st.session_state.scenario_files,
-        use_container_width=True,
-    )
-with run_col3:
-    stop_btn = st.button(
-        "⏹ Stop",
-        disabled=not st.session_state.running,
-        use_container_width=True,
+    selected_paths: list[str] = st.multiselect(
+        "실행할 시나리오",
+        options=list(scenario_labels.keys()),
+        format_func=lambda x: scenario_labels.get(x, x),
+        default=list(scenario_labels.keys()),
+        disabled=st.session_state.running,
     )
 
-if stop_btn:
-    st.session_state.stop_requested = True
+    run_col1, run_col2, run_col3 = st.columns([2, 2, 1])
+    with run_col1:
+        run_selected_btn = st.button(
+            "▶ Run Selected",
+            disabled=st.session_state.running or not selected_paths,
+            use_container_width=True,
+            type="primary",
+        )
+    with run_col2:
+        run_all_btn = st.button(
+            "⏩ Run All",
+            disabled=st.session_state.running or not st.session_state.scenario_files,
+            use_container_width=True,
+        )
+    with run_col3:
+        stop_btn = st.button(
+            "⏹ Stop",
+            disabled=not st.session_state.running,
+            use_container_width=True,
+        )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Execution
-# ──────────────────────────────────────────────────────────────────────────────
+    if stop_btn:
+        st.session_state.stop_requested = True
 
-targets: list[str] = []
-if run_selected_btn:
-    targets = selected_paths
-elif run_all_btn:
-    targets = list(scenario_labels.keys())
+    # ── Execution ─────────────────────────────────
 
-if targets:
-    errors = validate_config()
-    if errors:
-        for e in errors:
-            st.error(e)
-    else:
-        _token_ok, _token_err = _ensure_valid_token()
-        if not _token_ok:
-            st.error(_token_err)
+    targets: list[str] = []
+    if run_selected_btn:
+        targets = selected_paths
+    elif run_all_btn:
+        targets = list(scenario_labels.keys())
+
+    if targets:
+        errors = validate_config()
+        if errors:
+            for e in errors:
+                st.error(e)
         else:
-            st.session_state.running = True
-            st.session_state.stop_requested = False
-            st.session_state.results = []
+            _token_ok, _token_err = _ensure_valid_token()
+            if not _token_ok:
+                st.error(_token_err)
+            else:
+                st.session_state.running = True
+                st.session_state.stop_requested = False
+                st.session_state.results = []
 
-            st.subheader("진행 상황")
+                st.subheader("진행 상황")
 
-            results: list[ScenarioResult] = []
+                results: list[ScenarioResult] = []
 
-            for yaml_path in targets:
-                if st.session_state.stop_requested:
-                    st.warning("⏹ 실행이 중단되었습니다.")
-                    break
-
-                scenario_name = scenario_labels.get(yaml_path, yaml_path)
-                log_lines: list[str] = []
-
-                with st.status(f"🔄 {scenario_name} 실행 중...", expanded=True) as status_box:
-                    log_area = st.empty()
-
-                    def on_update(msg: str, level: str = "info", _log=log_lines, _area=log_area):
-                        _log.append(msg)
-                        _area.markdown(
-                            "\n\n".join(f"`{line}`" for line in _log[-15:])
-                        )
-                        if st.session_state.stop_requested:
-                            raise InterruptedError("사용자가 실행을 중단했습니다.")
-
-                    try:
-                        engine = build_engine(on_update)
-                        result = engine.run_scenario(yaml_path)
-                        results.append(result)
-
-                        if result.final_status == StepStatus.PASS:
-                            status_box.update(label=f"✅ {scenario_name}", state="complete", expanded=False)
-                        else:
-                            status_box.update(label=f"❌ {scenario_name}", state="error", expanded=True)
-
-                    except InterruptedError:
-                        status_box.update(label=f"⏹ {scenario_name} — 중단됨", state="error", expanded=False)
+                for yaml_path in targets:
+                    if st.session_state.stop_requested:
+                        st.warning("⏹ 실행이 중단되었습니다.")
                         break
-                    except Exception as e:
-                        traceback.print_exc()
-                        st.error(f"실행 오류: {e}")
-                        status_box.update(label=f"❌ {scenario_name} — 오류", state="error", expanded=True)
 
-            st.session_state.results = results
-            st.session_state.running = False
+                    scenario_name = scenario_labels.get(yaml_path, yaml_path)
+                    log_lines: list[str] = []
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Result Report
-# ──────────────────────────────────────────────────────────────────────────────
+                    with st.status(f"🔄 {scenario_name} 실행 중...", expanded=True) as status_box:
+                        log_area = st.empty()
 
-if st.session_state.results:
-    st.divider()
-    st.subheader("결과 리포트")
+                        def on_update(msg: str, level: str = "info", _log=log_lines, _area=log_area):
+                            _log.append(msg)
+                            _area.markdown(
+                                "\n\n".join(f"`{line}`" for line in _log[-15:])
+                            )
+                            if st.session_state.stop_requested:
+                                raise InterruptedError("사용자가 실행을 중단했습니다.")
 
-    # ── Summary Table ─────────────────────────────
-    rows = []
-    for r in st.session_state.results:
-        judge_reasons = []
-        total_elapsed = 0.0
-        for step in r.steps:
-            if step.judge_result:
-                judge_reasons.append(step.judge_result.reason)
-            if step.elapsed_time:
-                total_elapsed += step.elapsed_time
+                        try:
+                            engine = build_engine(on_update)
+                            result = engine.run_scenario(yaml_path)
+                            results.append(result)
 
-        rows.append({
-            "시나리오": r.scenario_name,
-            "결과": r.final_status.value,
-            "총 소요(s)": round(total_elapsed, 2),
-            "LLM 판정 요약": " / ".join(judge_reasons) if judge_reasons else "-",
-        })
+                            if result.final_status == StepStatus.PASS:
+                                status_box.update(label=f"✅ {scenario_name}", state="complete", expanded=False)
+                            else:
+                                status_box.update(label=f"❌ {scenario_name}", state="error", expanded=True)
 
-    df = pd.DataFrame(rows)
+                        except InterruptedError:
+                            status_box.update(label=f"⏹ {scenario_name} — 중단됨", state="error", expanded=False)
+                            break
+                        except Exception as e:
+                            traceback.print_exc()
+                            st.error(f"실행 오류: {e}")
+                            status_box.update(label=f"❌ {scenario_name} — 오류", state="error", expanded=True)
 
-    def _highlight(val: str) -> str:
-        if val == "PASS":
-            return "background-color:#d4edda; color:#155724"
-        if val in ("FAIL", "ERROR"):
-            return "background-color:#f8d7da; color:#721c24"
-        return ""
+                st.session_state.results = results
+                st.session_state.running = False
 
-    st.dataframe(
-        df.style.map(_highlight, subset=["결과"]),
-        use_container_width=True,
-        hide_index=True,
-    )
+    # ── Result Report ──────────────────────────────
 
-    # ── Detailed Expanders ────────────────────────
-    st.subheader("상세 로그")
+    if st.session_state.results:
+        st.divider()
+        st.subheader("결과 리포트")
 
-    for r in st.session_state.results:
-        icon = "✅" if r.final_status == StepStatus.PASS else "❌"
-        with st.expander(f"{icon} {r.scenario_name}", expanded=(r.final_status != StepStatus.PASS)):
+        rows = []
+        for r in st.session_state.results:
+            judge_reasons = []
+            total_elapsed = 0.0
             for step in r.steps:
-                status_icon = {
-                    StepStatus.PASS: "🟢",
-                    StepStatus.FAIL: "🔴",
-                    StepStatus.ERROR: "🔴",
-                    StepStatus.SKIP: "⚪",
-                }.get(step.status, "⚪")
-
-                col_a, col_b = st.columns([5, 1])
-                with col_a:
-                    st.markdown(f"**{status_icon} {step.step}**")
-                with col_b:
-                    if step.elapsed_time is not None:
-                        st.caption(f"{step.elapsed_time:.2f}s")
-
-                if step.response:
-                    with st.expander("Response", expanded=False):
-                        st.markdown(step.response)
-
-                if step.raw_response:
-                    with st.expander("Raw SSE Events", expanded=False):
-                        st.code(step.raw_response, language="text")
-
                 if step.judge_result:
-                    badge = (
-                        "🟢 PASS" if step.judge_result.status.value == "PASS"
-                        else "🔴 FAIL"
+                    judge_reasons.append(step.judge_result.reason)
+                if step.elapsed_time:
+                    total_elapsed += step.elapsed_time
+
+            rows.append({
+                "시나리오": r.scenario_name,
+                "결과": r.final_status.value,
+                "총 소요(s)": round(total_elapsed, 2),
+                "LLM 판정 요약": " / ".join(judge_reasons) if judge_reasons else "-",
+            })
+
+        df = pd.DataFrame(rows)
+
+        def _highlight(val: str) -> str:
+            if val == "PASS":
+                return "background-color:#d4edda; color:#155724"
+            if val in ("FAIL", "ERROR"):
+                return "background-color:#f8d7da; color:#721c24"
+            return ""
+
+        st.dataframe(
+            df.style.map(_highlight, subset=["결과"]),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.subheader("상세 로그")
+
+        for r in st.session_state.results:
+            icon = "✅" if r.final_status == StepStatus.PASS else "❌"
+            with st.expander(f"{icon} {r.scenario_name}", expanded=(r.final_status != StepStatus.PASS)):
+                for step in r.steps:
+                    status_icon = {
+                        StepStatus.PASS: "🟢",
+                        StepStatus.FAIL: "🔴",
+                        StepStatus.ERROR: "🔴",
+                        StepStatus.SKIP: "⚪",
+                    }.get(step.status, "⚪")
+
+                    col_a, col_b = st.columns([5, 1])
+                    with col_a:
+                        st.markdown(f"**{status_icon} {step.step}**")
+                    with col_b:
+                        if step.elapsed_time is not None:
+                            st.caption(f"{step.elapsed_time:.2f}s")
+
+                    if step.response:
+                        with st.expander("Response", expanded=False):
+                            st.markdown(step.response)
+
+                    if step.raw_response:
+                        with st.expander("Raw SSE Events", expanded=False):
+                            st.code(step.raw_response, language="text")
+
+                    if step.judge_result:
+                        badge = (
+                            "🟢 PASS" if step.judge_result.status.value == "PASS"
+                            else "🔴 FAIL"
+                        )
+                        st.markdown(f"**Judge:** {badge} — {step.judge_result.reason}")
+
+                    if step.error:
+                        st.error(f"오류: {step.error}")
+
+                    st.divider()
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tab 2: Scenario Editor
+# ──────────────────────────────────────────────────────────────────────────────
+
+with tab_editor:
+    import json as _json
+    import yaml as _yaml
+
+    st.subheader("Scenario 파일 편집기")
+
+    scenarios_root = Path(st.session_state.scenarios_dir)
+    scenario_dirs = sorted([d for d in scenarios_root.iterdir() if d.is_dir()])
+
+    if not scenario_dirs:
+        st.info(f"`{st.session_state.scenarios_dir}` 경로에 시나리오 폴더가 없습니다.")
+    else:
+        # ── 1단계: 시나리오 폴더 선택 ──────────────────────
+        folder_options = {str(d): d.name for d in scenario_dirs}
+        selected_folder = st.selectbox(
+            "시나리오 폴더",
+            options=list(folder_options.keys()),
+            format_func=lambda x: folder_options.get(x, x),
+        )
+
+        if selected_folder:
+            folder_path = Path(selected_folder)
+            editable_files = sorted(
+                f for f in folder_path.iterdir()
+                if f.is_file() and f.suffix in (".yaml", ".yml", ".json")
+            )
+
+            if not editable_files:
+                st.info("편집 가능한 파일(.yaml/.json)이 없습니다.")
+            else:
+                # ── 2단계: 파일 선택 ───────────────────────────
+                file_label_map = {str(f): f.name for f in editable_files}
+                selected_file = st.selectbox(
+                    "편집할 파일",
+                    options=list(file_label_map.keys()),
+                    format_func=lambda x: file_label_map.get(x, x),
+                )
+
+                if selected_file:
+                    edit_path = Path(selected_file)
+                    is_json = edit_path.suffix == ".json"
+                    editor_key = f"file_editor__{selected_file}"
+
+                    if editor_key not in st.session_state:
+                        st.session_state[editor_key] = edit_path.read_text(encoding="utf-8")
+
+                    ec1, ec2 = st.columns([1, 5])
+                    with ec1:
+                        if st.button("🔄 파일 다시 읽기", use_container_width=True):
+                            st.session_state[editor_key] = edit_path.read_text(encoding="utf-8")
+                            st.toast("파일을 다시 읽었습니다.")
+
+                    edited = st.text_area(
+                        f"`{edit_path}`",
+                        height=480,
+                        key=editor_key,
                     )
-                    st.markdown(f"**Judge:** {badge} — {step.judge_result.reason}")
 
-                if step.error:
-                    st.error(f"오류: {step.error}")
+                    save_col, preview_col = st.columns([1, 4])
+                    with save_col:
+                        if st.button("💾 저장", type="primary", use_container_width=True):
+                            try:
+                                if is_json:
+                                    _json.loads(edited)  # JSON 유효성 검사
+                                else:
+                                    _yaml.safe_load(edited)  # YAML 유효성 검사
+                                edit_path.write_text(edited, encoding="utf-8")
+                                st.success(f"저장 완료: `{edit_path}`")
+                                if edit_path.suffix in (".yaml", ".yml"):
+                                    load_scenario_list()
+                            except (_json.JSONDecodeError, _yaml.YAMLError) as exc:
+                                st.error(f"파싱 오류: {exc}")
+                            except Exception as exc:
+                                st.error(f"저장 실패: {exc}")
 
-                st.divider()
+                    with preview_col:
+                        with st.expander("파싱 미리보기", expanded=False):
+                            try:
+                                if is_json:
+                                    st.json(_json.loads(edited))
+                                else:
+                                    st.json(_yaml.safe_load(edited))
+                            except Exception as exc:
+                                st.error(f"파싱 오류: {exc}")

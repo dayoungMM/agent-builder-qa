@@ -164,7 +164,7 @@
             }
           ],
           "mcp_catalogs": [],
-          "serving_name": "GIP/gpt-4.1",
+          "serving_name": "@@llm_agent__generator_1@@",
           "serving_model": "GIP/gpt-4.1",
           "model_parameters": null
         },

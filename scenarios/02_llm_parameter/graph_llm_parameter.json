@@ -140,7 +140,7 @@
             }
           ],
           "mcp_catalogs": [],
-          "serving_name": "GIP/ax4",
+          "serving_name": "@@llm_agent__generator_1@@",
           "serving_model": "GIP/ax4",
           "model_parameters": {
             "params": [

@@ -112,33 +112,32 @@ spec:
 1. **Environment Setup**: LLM 설정 및 API Base URL 로드.
 2. **Scenario Loading**: 특정 디렉토리 내 모든 `.yaml` 스캔.
 3. **리소스 준비 단계** (Prompts → Graph 순서로 처리):
-   - **Prompts/Tools/MCPs Stage**: 아래 리소스 처리 로직에 따라 각 리소스를 준비하고 ID 맵 구성.
-   - **LLM 치환값 맵 구성**: `scenario.yaml`의 `llm` 항목에서 `placeholder_in_graph`를 key, `replace_to`를 value로 맵에 추가.
-   - **Graph Stage**: ID 맵 기반으로 graph JSON 내 `@@...@@` 변수 치환 후 Graph 생성/업데이트.
+   - **Prompts/Tools/MCPs Stage**: 아래 리소스 처리 로직에 따라 각 리소스를 UUID 기반으로 준비.
+   - **LLM 치환값 맵 구성**: `scenario.yaml`의 `llms` 항목에서 `placeholder_in_graph`를 key, `replace_to`를 value로 맵에 추가.
+   - **Graph Stage**: LLM 치환값 맵으로 graph JSON 내 `@@...@@` LLM 플레이스홀더(serving_name)만 치환 후 Graph 생성/업데이트. (prompt_id, tool_ids 등 UUID 필드는 graph.json에 이미 하드코딩)
 4. **App Stage**: 생성된 Graph 기반 App 배포 API 호출 → Stream API 호출 → **LLM 판정**.
 5. **Cleanup**: `auto-delete: true` 항목에 대해 Delete API 순차 실행 (App → Graph → Prompt).
 
 ### **리소스 처리 로직 (Prompts / Tools / MCPs 공통)**
 
 ```
-1. GET API로 동일한 name을 가진 리소스 검색
+1. scenario.yaml의 id 필드(UUID)로 리소스 존재 여부 확인 (GET)
 2. 검색 결과가 있으면:
    a. update-if-exists == true → PUT API로 업데이트
    b. update-if-exists == false → 기존 리소스 재사용 (업데이트 생략)
-3. 검색 결과가 없으면: POST API로 신규 생성
-4. 확보한 리소스의 id를 ID 맵에 추가
-   - key: placeholder_in_graph 값
-   - value: 리소스 id
-   - 예시: {"generator_01_prompt": "w3sgb-..."}
+3. 검색 결과가 없으면: Import API(POST)로 해당 UUID를 id로 하여 신규 생성
+   - json_path의 JSON 파일을 request body로 사용
+   - graph.json에 UUID가 이미 하드코딩되어 있으므로 별도 ID 맵 불필요
 ```
 
-### **Graph JSON 변수 치환 로직**
+### **Graph JSON LLM 치환 로직**
 
 ```
 1. graph.file_path의 JSON 파일 로드
-2. JSON 내 @@...@@ 형식으로 감싸진 모든 플레이스홀더 탐색
-3. ID 맵(prompts/tools/mcps ID + llm 치환값)에서 해당 키를 찾아 값으로 교체
+2. JSON 내 @@...@@ 형식으로 감싸진 LLM 플레이스홀더(serving_name) 탐색
+3. scenario.yaml의 llms 항목(placeholder_in_graph → replace_to)으로 치환
 4. 치환 완료된 JSON으로 Graph 생성(POST) 또는 업데이트(PUT)
+   ※ prompt_id, tool_ids, mcp_catalogs[].id, repo_id 등 UUID 필드는 graph.json에 이미 하드코딩되어 별도 치환 불필요
 ```
 
 ---
@@ -189,11 +188,11 @@ spec:
 
 ### 5.3. 테스트 엔진 (Execution Logic)
 
-* **변수 치환 시스템**:
-  * Prompts/Tools/MCPs는 GET으로 이름 검색 → 존재 시 `update-if-exists` 확인 후 PUT 또는 재사용, 없으면 POST 생성.
-  * 각 리소스의 id를 `{placeholder_in_graph: id}` 형태의 ID 맵으로 관리.
-  * LLM 항목은 `scenario.yaml`에서 직접 읽어 `{placeholder_in_graph: replace_to}` 형태로 ID 맵에 추가.
-  * Graph 생성/업데이트 시 JSON 내 `@@...@@` 플레이스홀더를 ID 맵의 값으로 일괄 치환.
+* **UUID 기반 리소스 관리**:
+  * graph.json에는 prompt_id, tool_ids, mcp_catalogs[].id, repo_id 등 UUID가 직접 하드코딩.
+  * scenario.yaml의 각 리소스 섹션(prompts/tools/mcps/knowledges)에 `id` 필드로 해당 UUID 명시.
+  * 엔진은 id 기준으로 리소스 존재 여부를 확인하고, `json_path`의 파일로 Import API를 호출하여 생성.
+  * LLM의 `serving_name`은 환경별로 달라질 수 있으므로 `scenario.yaml`의 `llms` 항목에서 `@@...@@` 플레이스홀더 치환 방식 유지.
 
 * **LLM Judge**:
   * `answer-judge`에 정의된 `question`을 전달.
@@ -218,6 +217,7 @@ spec:
 scenario_name: "Simple Chatbot E2E Test"
 graph:
   name: "[QA]simple_chatbot"
+  id: 7ac8760c-b0e7-4606-aff4-412a106182ed # uuid 여야합니다. 이 id로 생성됩니다
   file_path: "./scenarios/01_simple/graph_simple_chatbot.json"
   auto-delete: true
   update-if-exists: false
@@ -231,26 +231,26 @@ llms:
     replace_to: "GIP/gpt-4o" #환경별로 달라질 수 있습니다.
 prompts:
   - name: "[QA]generator_basic"
-    placeholder_in_graph: generator_01_basic
-    json_path: "./scenarios/01_simple/prompt_generator_01_basic.json"
-    auto-delete: true 
+    id: 5920682c-4d0f-411d-a38e-645317a6802e # graph.json의 prompt_id 값과 동일한 UUID
+    json_path: "./scenarios/01_simple/prompt_5920682c-4d0f-411d-a38e-645317a6802e.json"
+    auto-delete: true
     update-if-exists: false
 tools:
   - name: "tavily_search"
-    placeholder_in_graph: generator_01_tavily
-    json_path: "./scenarios/01_simple/tool_generator_01_tavily.json"
+    id: 5920682c-4d0f-411d-a38e-645317a6802e # graph.json의 tool_ids 값과 동일한 UUID
+    json_path: "./scenarios/01_simple/tool_5920682c-4d0f-411d-a38e-645317a6802e.json"
     auto-delete: false
     update-if-exists: false
 mcps:
   - name: "cinema-search"
-    placeholder_in_graph: generator_01_cinema
-    json_path: "./scenarios/01_simple/mcp_generator_01_cinema.json"
+    id: 5920682c-4d0f-411d-a38e-645317a6802e # graph.json의 mcp_catalogs[].id 값과 동일한 UUID
+    json_path: "./scenarios/01_simple/mcp_5920682c-4d0f-411d-a38e-645317a6802e.json"
     auto-delete: false
     update-if-exists: false
 knowledges:
   - name: "test-knowledge"
-    placeholder_in_graph: retriever_01_repo
-    json_path: "./scenarios/01_simple/know_retriever_01_repo.json"
+    id: 5920682c-4d0f-411d-a38e-645317a6802e # graph.json의 repo_id 값과 동일한 UUID
+    json_path: "./scenarios/01_simple/know_5920682c-4d0f-411d-a38e-645317a6802e.json"
     auto-delete: false
     update-if-exists: false
 
@@ -264,10 +264,11 @@ answer-judge:
 ```
 
 **필드 설명**
-- json_path: 생성 및 업데이트 할 때 사용할 request body가 담긴 json
-- placeholder_in_graph : graph.json에서 대치할 대상. value로 `@@gerator_01_serving_name@@ `이렇게 이중 골뱅이로 되어있어야 대치 가능합니다.
+- id: graph.json에 하드코딩된 UUID 값. 이 id로 리소스를 생성/검증합니다.
+- json_path: 생성 및 업데이트 할 때 사용할 request body가 담긴 json. 파일명 규칙: `{type}_{uuid}.json`
 - auto-delete: 테스트 완료 후 자동으로 삭제할지 여부
-- update-if-exists: 동일한 이름의 프롬프트가 이미 존재하면 update 할지 여부. default 는 false 입니다.
+- update-if-exists: 동일한 id의 리소스가 이미 존재하면 update 할지 여부. default 는 false 입니다.
+- llms의 placeholder_in_graph: graph.json의 serving_name 필드를 `@@...@@` 형식으로 치환할 때 사용하는 key (LLM에만 적용)
 
 ---
 
