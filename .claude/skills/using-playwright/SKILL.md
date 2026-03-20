@@ -96,9 +96,13 @@ browser_console_messages → level: "error"
 
 ### 4-3. 스크린샷 저장 (에러 상태 기록)
 
+스크린샷은 반드시 아래 경로에 저장한다:
+
 ```
-browser_take_screenshot → type: "png", filename: "error-capture.png"
+browser_take_screenshot → type: "png", filename: ".claude/skills/using-playwright/snapshots/error-capture.png"
 ```
+
+> 저장 경로: `.claude/skills/using-playwright/snapshots/` (gitignore 처리됨)
 
 ### 4-4. 에러 정리 및 보고
 
@@ -113,7 +117,7 @@ browser_take_screenshot → type: "png", filename: "error-capture.png"
 **콘솔 에러:**
 <console_messages 결과>
 
-**에러 캡처:** error-capture.png 저장됨
+**에러 캡처:** .claude/skills/using-playwright/snapshots/error-capture.png 저장됨
 ```
 
 ---

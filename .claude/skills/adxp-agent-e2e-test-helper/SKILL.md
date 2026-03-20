@@ -43,21 +43,39 @@ skills 폴더(`.claude/skills/adxp-agent-e2e-test-helper`) 안에 `echoapi.json`
 
 ### Step 2: graph.json 만들기
 
+`echoapi.json`이 있더라도, 사용자에게 아래 두 가지 옵션을 제시한다:
+
+```
+graph.json을 어떻게 생성하시겠어요?
+
+A) echoapi.json에서 자동 추출
+B) graph.json 파일을 직접 제공 (파일 경로 또는 내용 붙여넣기)
+```
+
+**옵션 A: echoapi.json에서 자동 추출**
+
 `echoapi.json`을 읽어 **Graph 생성 API**의 request body 예시를 찾는다.
 
 - **있으면** → 사용자에게:
   ```
-  echoapi.json가 있습니다. 어떤 폴더의 어떤 이름(summary)로 테스트 생성하시겠습니까?
-  예:agents_backend/graph_test_v2 중에서 이름: llm_parameter 
+  어떤 폴더의 어떤 이름(summary)로 테스트 생성하시겠습니까?
+  예: agents_backend/graph_test_v2 중에서 이름: llm_parameter
   ```
   graph_test_v2의 llm_parameter 라고 사용자가 입력했을 때
-  -> ehoapi.json에서 summary:llm_parameter 인 것 중에서 tags:["A.XPlatform - agents_backend_api/agents_backend/graph_test_v2"] 이고  인것을 찾아서 읽어와서 requestBody 중 example을 json 파일로 생성
+  -> echoapi.json에서 summary:llm_parameter 인 것 중에서 tags:["A.XPlatform - agents_backend_api/agents_backend/graph_test_v2"] 인 것을 찾아서 읽어와서 requestBody 중 example을 json 파일로 생성
 - **없으면** → 사용자에게:
   ```
-  echoapi.json에서 Graph 생성 API request body를 찾지 못했습니다.
-  Graph 생성 API의 request body를 직접 입력해주세요.
+  echoapi.json에서 해당 Graph 생성 API request body를 찾지 못했습니다.
+  옵션 B(직접 제공)로 진행해주세요.
   ```
-  사용자 입력을 받아 `scenarios/{폴더}/graph_<name>.json` 파일 생성.
+
+**옵션 B: graph.json 직접 제공**
+
+사용자가 파일 경로 또는 JSON 내용을 직접 제공하면:
+- 파일 경로인 경우: 해당 경로의 파일을 읽어 `scenarios/{폴더}/graph_<name>.json`으로 복사
+- JSON 내용 붙여넣기인 경우: 입력받은 내용을 `scenarios/{폴더}/graph_<name>.json`으로 저장
+
+시나리오 폴더명과 graph 이름을 사용자에게 확인 후 저장.
 
 ---
 
@@ -150,10 +168,24 @@ llm은 JSON 파일 생성 없이 scenario.yaml llms 섹션에만 추가.
    - app: yes / no
    - prompts: yes / no  ← prompt.json이 있는 경우만
 
-2. update-if-exists (동일한 이름의 리소스가 있고 body가 다를 경우 업데이트할까요?)
+2. update-if-exists (아래 설명 참고)
    - graph: yes / no
-   - prompts: yes / no  ← prompt.json이 있는 경우만
+   - prompts: yes / no   ← prompts 섹션이 있을 때만
+   - tools: yes / no     ← tools 섹션이 있을 때만
+   - mcps: yes / no      ← mcps 섹션이 있을 때만
+   - knowledges: yes / no ← knowledges 섹션이 있을 때만
 ```
+
+**update-if-exists — 이미 리소스가 존재하는 경우 업데이트 할지 여부**
+
+시나리오에는 리소스마다 **`id`**(긴 고유 번호, UUID)가 붙어 있다. 테스트를 돌리면 프로그램이 **“이 번호로, 옆에 적힌 JSON 파일 내용을 서버에 반영해 달라”**고 요청한다.
+
+- **서버에 그 번호가 아직 없으면** → 새로 등록되고 끝.
+- **서버에 그 번호로 이미 뭔가 있으면** (다른 사람이 만들었거나 예전 테스트가 남은 경우):
+  - **`update-if-exists: true`** → **지금 폴더에 있는 JSON 내용으로 서버 쪽을 갱신**한다. (시나리오 파일을 고치면 다음 실행에 반영되고 싶을 때)
+  - **`update-if-exists: false`** → **서버에 이미 있는 걸 그대로 둔다.** 폴더의 JSON만 수정해도 서버 데이터는 안 바뀐다. (남이 만든 리소스를 건드리지 않고 테스트만 하고 싶을 때)
+
+**`id`를 비워 둔 경우**는 “번호 정해 주지 말고 새로 하나 만들어 달라”에 가깝고, 그때는 서버가 새 번호를 붙여 준다.
 
 **4-3. answer-judge 섹션 질문**
 
@@ -172,14 +204,14 @@ answer-judge 내용을 알려주세요.
 ## 시나리오 YAML 구조 (참고)
 
 > **[중요] id 필드 규칙**
-> - `graph`, `prompts`, `tool`, `mcp` 섹션에는 반드시 UUID 형식의 `id` 필드를 지정해야 합니다.
-> - `id`가 있으면 Import API를 사용하여 해당 UUID로 리소스를 생성/검증합니다.
-> - `app`은 id 필드 없이 name만 지정합니다 (Import API 미사용).
-> - **`id`가 없는 섹션을 발견하면**: 터미널에서 UUID4를 생성하여 scenario.yaml에 추가한 뒤 진행한다.
+> - `graph`, `prompts`, `tool`, `mcp` 등에는 보통 **UUID 형식의 `id`**를 둔다. (서버에서 “이 번호로 리소스를 맞추겠다”는 뜻.)
+> - `id`가 있으면 테스트 실행 시 **그 번호로 JSON 파일 내용을 서버에 등록·맞춤**하는 흐름으로 간다.
+> - `app`은 **`id` 없이 이름(`name`)만** 쓴다. (그래프와 붙이는 앱이라 번호 고정 방식이 다름.)
+> - **`id`가 없으면**: 리소스마다 새 번호를 쓰려면 아래로 UUID를 만들어 scenario.yaml에 넣는다. (`graph`와 `prompts` 등은 **서로 다른 번호**여야 한다.)
 >   ```bash
 >   python3 -c "import uuid; print(uuid.uuid4())"
 >   ```
->   graph, prompts 각각에 대해 UUID를 별도로 생성한다.
+>   리소스 종류에 따라 `id` 없이 실행해도 서버가 **새 번호를 붙여 주는** 경우가 있다.
 
 ```yaml
 scenario_name: "<시나리오 이름>"
@@ -250,3 +282,46 @@ answer-judge:
 2. 사용자가 변경할 내용을 명확히 파악한 뒤 수정
 3. `auto-delete`, `update-if-exists` 설정이 의도에 맞는지 재확인
 4. `answer-judge.criteria`가 변경된 동작을 반영하는지 확인
+
+---
+
+## graph.json 트러블슈팅
+
+### Generator에 query가 전달되지 않는 문제
+
+**증상**: Generator 노드가 응답을 생성하지만 사용자의 질문과 무관한 답변이 나오거나, "메시지가 비어있다"는 식의 응답이 나오는 경우.
+
+**원인**: `agent__generator` 노드의 `input_keys` 중 `name: "query"`의 `keytable_id`가 비어있거나 잘못 연결되어 있을 때 발생.
+
+**확인 방법**: graph.json에서 아래 두 노드를 비교한다.
+
+```json
+// ✅ input__basic 노드 — query의 keytable_id 원본
+{
+  "type": "input__basic",
+  "data": {
+    "input_keys": [
+      { "name": "query", "keytable_id": "query_b153394d" }  // ← 이 값을
+    ]
+  }
+}
+
+// ❌ agent__generator 노드 — query의 keytable_id가 비어있으면 연결 끊김
+{
+  "type": "agent__generator",
+  "data": {
+    "input_keys": [
+      { "name": "query", "keytable_id": "" }  // ← 여기에 동일한 값이 들어가야 함
+    ]
+  }
+}
+```
+
+**수정**: `agent__generator`의 `input_keys[name=query].keytable_id` 값을 `input__basic`의 `query` keytable_id와 동일하게 설정.
+
+```json
+// ✅ 수정 후
+{ "name": "query", "keytable_id": "query_b153394d" }
+```
+
+> `keytable_id`는 `{field_name}_{node_id}` 형식 (예: `query_b153394d`에서 `b153394d`는 input 노드의 id).

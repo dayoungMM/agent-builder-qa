@@ -1,0 +1,12 @@
+{
+    "name": "qa_cinema_search",
+    "display_name": "qa_cinema_search",
+    "description": "Search for Korean cinema news and movie lineup information.",
+    "tool_type": "custom_code",
+    "code": "async def cinema_web_search(query: str):\n    return \"\"\"<씨네21>은 올해도 한국영화 신작 라인업 프로젝트를 이어간다. 총 11편의 신작 영화의 감독을 만났다. 장항준 감독은 한국영화 최초로 단종의 숨겨진 이야기를 다룬 사극 <왕과 사는 남자>로 설 연휴를 연다. 배우 전지현이 11년 만에 스크린으로 돌아오는 연상호 감독의 <군체>는 한국형 좀비물의 또 다른 진화를 예고 중이다. 1400만 관객을 동원했던 <국제시장> 속편을 윤제균 감독이 새로운 부자의 이야기로 풀어내고, 넷플릭스 글로벌 흥행 기록을 세운 <크로스>의 이명훈 감독도 부부 액션을 이어간다. 허진호 감독이 8·15 저격 사건을 바탕으로 연출한 <암살자(들)>, 강일람표를 통해 당신의 한편을 찾아보시기 바란다. [...] # cine21\"\"\"",
+    "tags": [
+        {
+            "name": "QA"
+        }
+    ]
+}

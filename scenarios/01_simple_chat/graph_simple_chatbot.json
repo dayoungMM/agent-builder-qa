@@ -144,7 +144,7 @@
               "required": false,
               "description": "",
               "fixed_value": null,
-              "keytable_id": "",
+              "keytable_id": "query_b153394d",
               "object_type": "string"
             },
             {

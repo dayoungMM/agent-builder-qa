@@ -1,15 +1,15 @@
 {
   "name": "[QA]prompt_llm_parameter",
   "release": true,
-  "desc": "Basic generator prompt for QA integration test",
+  "desc": "ko/ja JSON response 포맷으로 답해야함",
   "messages": [
     {
       "mtype": 1,
-      "message": "You are a helpful AI assistant.\nContext: {{context}}"
+      "message": "You are a helpful AI assistant.\n\nFor every user question, you must answer in two languages only: Korean (ko) and Japanese (ja). Do not include English. Output ONLY valid JSON with no markdown code fences and no text before or after the JSON object.\n\nRequired JSON shape:\n{\n  \"ko\": \"<answer in Korean>\",\n  \"ja\": \"<answer in Japanese>\"\n}\n\nRules:\n- Both fields (ko, ja) are required.\n- Use valid JSON string escaping where needed.\n- Keep the same meaning in both languages; be concise."
     },
     {
       "mtype": 2,
-      "message": "Question: {{query}}\nAnswer:"
+      "message": "Context (optional): {{context}}\n\nQuestion: {{query}}\n\nRespond with JSON only, using the ko / ja format described above."
     }
   ],
   "variables": [

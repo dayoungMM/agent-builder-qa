@@ -3,7 +3,7 @@ graph:
   id: 7ac8760c-b0e7-4606-aff4-412a106182ed
   name: "[QA]simple_chatbot"
   file_path: "./scenarios/01_simple_chat/graph_simple_chatbot.json"
-  auto-delete: true
+  auto-delete: false
   update-if-exists: false
 app:
   name: "[QA]simple_chatbot_app"
@@ -15,11 +15,10 @@ prompts:
   - id: 5920682c-4d0f-411d-a38e-645317a6802e
     name: "[QA]generator_basic"
     json_path: "./scenarios/01_simple_chat/prompt_5920682c-4d0f-411d-a38e-645317a6802e.json"
-    auto-delete: true
+    auto-delete: false
     update-if-exists: false
 answer-judge:
-  questions:
-    - "안녕"
-  criteria:
-    - "인사말에 적절히 대답해야 함"
-    - "HTTP Status 200"
+  - question: "안녕"
+    criteria:
+      - "인사말에 적절히 대답해야 함"
+      - "HTTP Status 200"

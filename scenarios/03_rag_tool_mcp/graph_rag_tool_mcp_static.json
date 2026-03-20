@@ -1,0 +1,483 @@
+{
+    "name": "[QA]rag_tool_mcp_static",
+    "description": "prompt, tool, mcp, rag 다쓰는 테스트 케이스",
+    "tags": [],
+    "graph": {
+        "edges": [
+            {
+                "id": "e08ebecf",
+                "data": {
+                    "send_to": "c14df21f",
+                    "category": {
+                        "id": "",
+                        "category": "",
+                        "description": ""
+                    },
+                    "edge_type": "none",
+                    "send_from": "c31bdd55",
+                    "condition_label": null
+                },
+                "type": "none",
+                "label": null,
+                "style": {
+                    "stroke": "#C4CADA",
+                    "strokeWidth": 3
+                },
+                "source": "c31bdd55",
+                "target": "c14df21f",
+                "markerEnd": {
+                    "type": "arrowclosed",
+                    "color": "#C4CADA",
+                    "width": 10,
+                    "height": 10
+                },
+                "marker_end": null,
+                "marker_start": null,
+                "reconnectable": null,
+                "source_handle": null,
+                "target_handle": null,
+                "condition_label": null
+            },
+            {
+                "id": "729b923b",
+                "data": {
+                    "send_to": "b3bedf8f",
+                    "category": {
+                        "id": "",
+                        "category": "",
+                        "description": ""
+                    },
+                    "edge_type": "none",
+                    "send_from": "c14df21f",
+                    "condition_label": null
+                },
+                "type": "none",
+                "label": null,
+                "style": {
+                    "stroke": "#C4CADA",
+                    "strokeWidth": 3
+                },
+                "source": "c14df21f",
+                "target": "b3bedf8f",
+                "markerEnd": {
+                    "type": "arrowclosed",
+                    "color": "#C4CADA",
+                    "width": 10,
+                    "height": 10
+                },
+                "marker_end": null,
+                "marker_start": null,
+                "reconnectable": null,
+                "source_handle": null,
+                "target_handle": null,
+                "condition_label": null
+            },
+            {
+                "id": "53603049",
+                "data": {
+                    "send_to": "685f226e",
+                    "category": {
+                        "id": "",
+                        "category": "",
+                        "description": ""
+                    },
+                    "edge_type": "none",
+                    "send_from": "b3bedf8f",
+                    "condition_label": null
+                },
+                "type": "none",
+                "label": null,
+                "style": {
+                    "stroke": "#C4CADA",
+                    "strokeWidth": 3
+                },
+                "source": "b3bedf8f",
+                "target": "685f226e",
+                "markerEnd": {
+                    "type": "arrowclosed",
+                    "color": "#C4CADA",
+                    "width": 10,
+                    "height": 10
+                },
+                "marker_end": null,
+                "marker_start": null,
+                "reconnectable": null,
+                "source_handle": null,
+                "target_handle": null,
+                "condition_label": null
+            },
+            {
+                "id": "a0fe5307",
+                "data": {
+                    "send_to": "4681485d",
+                    "category": {
+                        "id": "gen_right",
+                        "category": "gen_right",
+                        "description": ""
+                    },
+                    "edge_type": "none",
+                    "send_from": "685f226e",
+                    "condition_label": null
+                },
+                "type": "none",
+                "label": "gen_right",
+                "style": {
+                    "stroke": "#C4CADA",
+                    "strokeWidth": 3
+                },
+                "source": "685f226e",
+                "target": "4681485d",
+                "markerEnd": {
+                    "type": "arrowclosed",
+                    "color": "#C4CADA",
+                    "width": 10,
+                    "height": 10
+                },
+                "marker_end": null,
+                "marker_start": null,
+                "sourceHandle": "gen_right",
+                "reconnectable": null,
+                "source_handle": "gen_right",
+                "target_handle": null,
+                "condition_label": "gen_right"
+            }
+        ],
+        "nodes": [
+            {
+                "id": "c31bdd55",
+                "data": {
+                    "id": "c31bdd55",
+                    "name": "input__basic_1",
+                    "type": "input__basic",
+                    "input_keys": [
+                        {
+                            "name": "query",
+                            "required": true,
+                            "description": "사용자의 질의",
+                            "fixed_value": null,
+                            "keytable_id": "query_c31bdd55",
+                            "object_type": "string"
+                        }
+                    ],
+                    "description": ""
+                },
+                "type": "input__basic",
+                "style": {},
+                "measured": {
+                    "width": 600,
+                    "height": 588
+                },
+                "position": {
+                    "x": -360,
+                    "y": 30
+                },
+                "source_position": "left",
+                "target_position": "right"
+            },
+            {
+                "id": "c14df21f",
+                "data": {
+                    "id": "c14df21f",
+                    "name": "retriever__rewriter_multiquery_1",
+                    "type": "retriever__rewriter_multiquery",
+                    "input_keys": [
+                        {
+                            "name": "query",
+                            "required": true,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "query_c31bdd55",
+                            "object_type": "string"
+                        }
+                    ],
+                    "description": "MultiQuery 호출중입니다...🎯",
+                    "output_keys": [
+                        {
+                            "name": "rewritten_queries",
+                            "keytable_id": "rewritten_queries_c14df21f"
+                        }
+                    ],
+                    "query_rewriter": {
+                        "llm_chain": {
+                            "prompt": "83f5c8cc-cd4a-43ee-b319-432934459a13",
+                            "llm_config": {
+                                "api_key": "",
+                                "serving_name": "@@llm_retriever__rewriter_multiquery_1@@"
+                            }
+                        },
+                        "include_ori_query": false
+                    }
+                },
+                "type": "retriever__rewriter_multiquery",
+                "style": {},
+                "dragging": false,
+                "measured": {
+                    "width": 600,
+                    "height": 788
+                },
+                "position": {
+                    "x": 360,
+                    "y": -90
+                },
+                "selected": true,
+                "source_position": "left",
+                "target_position": "right"
+            },
+            {
+                "id": "b3bedf8f",
+                "data": {
+                    "id": "b3bedf8f",
+                    "name": "retriever__knowledge_1",
+                    "type": "retriever__knowledge",
+                    "input_keys": [
+                        {
+                            "name": "query",
+                            "required": true,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "query_c31bdd55",
+                            "object_type": "string"
+                        },
+                        {
+                            "name": "rewritten_queries",
+                            "required": false,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "rewritten_queries_c14df21f",
+                            "object_type": "string"
+                        }
+                    ],
+                    "description": "knowledge에서 검색중입니다...🔍",
+                    "output_keys": [
+                        {
+                            "name": "context",
+                            "keytable_id": "context_b3bedf8f"
+                        },
+                        {
+                            "name": "docs",
+                            "keytable_id": "docs_b3bedf8f"
+                        }
+                    ],
+                    "knowledge_retriever": {
+                        "script": "",
+                        "repo_id": "0d79ef6f-36d9-41a2-89ce-a2f9b3d2d655",
+                        "repo_kind": "repo",
+                        "index_name": "",
+                        "project_id": null,
+                        "embedding_info": null,
+                        "knowledge_info": null,
+                        "retrieval_options": {
+                            "top_k": 5,
+                            "filter": null,
+                            "file_ids": null,
+                            "keywords": null,
+                            "order_by": null,
+                            "threshold": 0.4,
+                            "vector_field": null,
+                            "query_keywords": null,
+                            "retrieval_mode": "dense",
+                            "scoring_profile": null,
+                            "hybrid_dense_ratio": 0.5,
+                            "scoring_parameters": null,
+                            "text_search_fields": null,
+                            "semantic_configuration_name": null
+                        },
+                        "vectordb_conn_info": null,
+                        "active_collection_id": ""
+                    }
+                },
+                "type": "retriever__knowledge",
+                "style": {},
+                "dragging": false,
+                "measured": {
+                    "width": 600,
+                    "height": 681
+                },
+                "position": {
+                    "x": 1110,
+                    "y": -120
+                },
+                "selected": false,
+                "source_position": "left",
+                "target_position": "right"
+            },
+            {
+                "id": "685f226e",
+                "data": {
+                    "id": "685f226e",
+                    "name": "agent__generator_1",
+                    "type": "agent__generator",
+                    "tools": [
+                        {
+                            "id": "c32801d3-d475-4ae8-aa01-e75007fda045",
+                            "name": "get_naver_finance",
+                            "tags": [],
+                            "tool_type": "custom_code",
+                            "description": "네이버 증권 홈페이지 데이터 조회. 네이버 금융 거래상위 종목을 가져옴",
+                            "display_name": "네이버 증권 홈페이지 정보 가져오는 tool"
+                        }
+                    ],
+                    "tool_ids": [
+                        "c32801d3-d475-4ae8-aa01-e75007fda045"
+                    ],
+                    "prompt_id": null,
+                    "fewshot_id": "",
+                    "input_keys": [
+                        {
+                            "name": "query",
+                            "required": true,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "query_c31bdd55",
+                            "object_type": "string"
+                        },
+                        {
+                            "name": "context",
+                            "required": false,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "context_b3bedf8f",
+                            "object_type": "string"
+                        }
+                    ],
+                    "description": "답변을 생성중입니다...🤖",
+                    "output_keys": [
+                        {
+                            "name": "content",
+                            "keytable_id": "content_685f226e"
+                        }
+                    ],
+                    "mcp_catalogs": [
+                        {
+                            "id": "15ec3562-7788-4152-a98d-68ea0fadc16e",
+                            "name": "qa-data-io",
+                            "tools": [
+                                {
+                                    "meta": null,
+                                    "name": "list_data_files",
+                                    "icons": null,
+                                    "title": null,
+                                    "enabled": true,
+                                    "execution": null,
+                                    "annotations": null,
+                                    "description": "List all files under the local data directory.",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "title": "list_data_filesArguments",
+                                        "properties": {}
+                                    },
+                                    "outputSchema": {
+                                        "type": "object",
+                                        "title": "list_data_filesOutput",
+                                        "required": ["result"],
+                                        "properties": {
+                                            "result": {
+                                                "type": "array",
+                                                "items": {"type": "string"},
+                                                "title": "Result"
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "meta": null,
+                                    "name": "read_data_file",
+                                    "icons": null,
+                                    "title": null,
+                                    "enabled": true,
+                                    "execution": null,
+                                    "annotations": null,
+                                    "description": "Read a UTF-8 text file from local/mcp/data.",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "title": "read_data_fileArguments",
+                                        "required": ["relative_path"],
+                                        "properties": {
+                                            "relative_path": {"type": "string", "title": "Relative Path"}
+                                        }
+                                    },
+                                    "outputSchema": {
+                                        "type": "object",
+                                        "title": "read_data_fileOutput",
+                                        "required": ["result"],
+                                        "properties": {
+                                            "result": {"type": "string", "title": "Result"}
+                                        }
+                                    }
+                                },
+                                {
+                                    "meta": null,
+                                    "name": "write_data_file",
+                                    "icons": null,
+                                    "title": null,
+                                    "enabled": true,
+                                    "execution": null,
+                                    "annotations": null,
+                                    "description": "Write a UTF-8 text file into local/mcp/data.",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "title": "write_data_fileArguments",
+                                        "required": ["relative_path", "content"],
+                                        "properties": {
+                                            "content": {"type": "string", "title": "Content"},
+                                            "overwrite": {"type": "boolean", "title": "Overwrite", "default": true},
+                                            "relative_path": {"type": "string", "title": "Relative Path"}
+                                        }
+                                    },
+                                    "outputSchema": {
+                                        "type": "object",
+                                        "title": "write_data_fileOutput",
+                                        "required": ["result"],
+                                        "properties": {
+                                            "result": {"type": "string", "title": "Result"}
+                                        }
+                                    }
+                                }
+                            ],
+                            "description": "cluster에 올린 file storage mcp",
+                            "auto_populate_tools": "mcp_catalog"
+                        }
+                    ],
+                    "serving_name": "@@llm_agent__generator_1@@",
+                    "serving_model": "GIP/gpt-4.1",
+                    "model_parameters": null
+                },
+                "type": "agent__generator",
+                "style": {},
+                "dragging": false,
+                "measured": {
+                    "width": 600,
+                    "height": 867
+                },
+                "position": {
+                    "x": 1890,
+                    "y": -90
+                },
+                "selected": false,
+                "source_position": "left",
+                "target_position": "right"
+            },
+            {
+                "id": "4681485d",
+                "data": {
+                    "id": "4681485d",
+                    "name": "output__relay_1",
+                    "type": "output__relay",
+                    "description": "응답 출력중입니다... 💬"
+                },
+                "type": "output__relay",
+                "style": {},
+                "measured": {
+                    "width": 600,
+                    "height": 361
+                },
+                "position": {
+                    "x": 2730,
+                    "y": 210
+                },
+                "source_position": "left",
+                "target_position": "right"
+            }
+        ]
+    }
+}

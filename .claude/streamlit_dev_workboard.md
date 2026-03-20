@@ -11,10 +11,14 @@
 
 ### 1-1. `core/models.py` — Pydantic 데이터 모델
 - [x] `PromptConfig` 모델 (id, name, json_path, auto-delete, update-if-exists)
-- [x] `GraphConfig` 모델 (id, name, file_path, auto-delete, update-if-exists)
-- [x] `AppConfig` 모델 (name, auto-delete)
-- [x] `AnswerJudge` 모델 (questions: list[str], criteria: list[str])
-- [x] `Scenario` 모델 (scenario_name, graph, app, prompts, answer-judge)
+- [x] `GraphConfig` 모델 (id, name, file_path, auto-delete, update-if-exists, force-create)
+- [x] `AppConfig` 모델 (name, auto-delete, force-create) — Task 7
+- [x] `LLMConfig` 모델 (placeholder_in_graph, replace_to) — Task 1
+- [x] `ToolConfig` 모델 (name, id, json_path, auto-delete, update-if-exists) — Task 2
+- [x] `MCPConfig` 모델 (name, id, json_path, auto-delete, update-if-exists) — Task 3
+- [x] `KnowledgeConfig` 모델 (name, id, json_path, auto-delete, update-if-exists) — Task 4
+- [x] `AnswerJudge` 모델 (questions, criteria, request-json-path) — Task 5
+- [x] `Scenario` 모델 (scenario_name, graph, app, llms, prompts, tools, mcps, knowledges, answer-judge)
 - [x] `StepResult` 모델 (step명, status, response, elapsed_time, judge_result, judge_reason)
 - [x] `ScenarioResult` 모델 (scenario_name, steps: list[StepResult], final_status)
 
@@ -36,20 +40,30 @@
   - JSON 파일 로드 (json_path)
   - `update-if-exists: false` → 이미 존재 시 기존 ID 재사용
   - POST `/prompts` API 호출 → `prompt_id` 추출 및 컨텍스트 저장
+- [x] **Tool Stage** 실행 로직 — Task 2
+  - POST `/api/v1/agent/tools/import?tool_uuid={id}` 또는 POST `/api/v1/agent/tools`
+- [x] **MCP Stage** 실행 로직 — Task 3
+  - POST `/api/v1/mcp/catalogs/import?mcp_id={id}` 또는 POST `/api/v1/mcp/catalogs`
+- [x] **Knowledge Stage** 실행 로직 — Task 4
+  - POST `/api/v1/rag/repos/import?repo_id={id}` 또는 POST `/api/v1/rag/repos`
 - [x] **Graph Stage** 실행 로직
   - JSON 파일 로드 (file_path)
+  - `@@placeholder@@` LLM 치환 (이전 LLM 단계 결과로) — Task 1
   - `{prompt_name}` 변수 치환 (이전 단계 결과로)
   - `force-create: true` 시 이름에 `{datetime}` 접미사 부여
   - `update-if-exists: false` → 이미 존재 시 기존 ID 재사용
   - POST/PUT `/graphs` API 호출 → `graph_id` 추출
-  - Stream API 호출 (`questions` 순회) → 응답 수집
-  - LLM Judge 호출 → 판정 결과 저장
+  - `request_json_path` 있으면 해당 JSON을 stream request body로 사용 — Task 5
+  - `HTTP Status {code}` criteria 자동 검증 (별도 step) — Task 6
+  - LLM Judge 호출 → 판정 결과 저장 (나머지 criteria만)
 - [x] **App Stage** 실행 로직
+  - `force-create: true` 시 타임스탬프 suffix로 항상 신규 생성 — Task 7
   - Graph 기반 App 배포 API 호출
-  - Stream API 호출 → 응답 수집
-  - LLM Judge 호출 → 판정 결과 저장
+  - `request_json_path` 있으면 해당 JSON을 stream request body로 사용 — Task 5
+  - `HTTP Status {code}` criteria 자동 검증 (별도 step) — Task 6
+  - LLM Judge 호출 → 판정 결과 저장 (나머지 criteria만)
 - [x] **Cleanup Stage** 로직
-  - `auto-delete: true` 항목 (App → Graph → Prompt 순) DELETE API 호출
+  - `auto-delete: true` 항목 (App → Graph → Prompt → Tool → MCP → Knowledge 순) DELETE API 호출
 - [x] `run_scenario(yaml_path: str) -> ScenarioResult` 함수 (위 단계들 오케스트레이션)
 - [x] 단계별 진행 상황을 콜백(callback)으로 외부에 노출 (Streamlit 실시간 연동용)
 

@@ -23,8 +23,7 @@ prompts:
     update-if-exists: false
 
 answer-judge:
-  questions:
-    - "hello가 한국어로 뭐야?"
-  criteria:
-    - "안녕 또는 안녕하세요가 답변에 포함되어야 함"
-    - "HTTP Status 200"
+  - question: "Messages are the fundamental unit of context for models in LangChain. They represent the input and output of models, carrying both the content and metadata needed to represent the state of a conversation when interacting with an LLM."
+    criteria:
+      - "질문(LangChain Messages)에 대해 내용이 맞고 충분히 설명해야 함"
+      - "ko/ja JSON response 포맷으로 답해야함"

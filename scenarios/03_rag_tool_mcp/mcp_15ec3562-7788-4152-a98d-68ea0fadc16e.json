@@ -1,0 +1,14 @@
+{
+    "name": "QA qa data io mcp",
+    "display_name": "[QA] file read/write",
+    "auth_type": "none",
+    "description": "cluster에 올린 file storage mcp",
+    "server_url": "http://data-io-server.aiplatform.svc.cluster.local:38080/mcp",
+    "tags": [
+        {
+            "name": "qa"
+        }
+    ],
+    "transport_type": "streamable-http",
+    "type": "serverless"
+}

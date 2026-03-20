@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
 import traceback
@@ -13,23 +14,29 @@ import yaml
 
 from core.judge import LLMJudge
 from core.models import (
-    AnswerJudge,
+    AnswerJudgeItem,
     AppConfig,
     GraphConfig,
+    JudgeResult,
     JudgeStatus,
+    KnowledgeConfig,
+    LLMConfig,
+    MCPConfig,
     PromptConfig,
     Scenario,
     ScenarioResult,
     StepResult,
     StepStatus,
+    ToolConfig,
 )
 
 
 class StreamError(Exception):
     """SSE 스트림 내 에러 이벤트 감지 시 발생."""
-    def __init__(self, message: str, raw_response: str = ""):
+    def __init__(self, message: str, raw_response: str = "", status_code: int = 0):
         super().__init__(message)
         self.raw_response = raw_response
+        self.status_code = status_code
 
 
 def load_scenario_from_file(path: Path) -> Scenario:
@@ -158,7 +165,22 @@ def print_results(results: Iterable[ScenarioResult], stream=None) -> None:
 #   App    : POST   /api/v1/agent/agents/apps
 #            POST   /api/v1/agent/agents/apps/hard-delete?app_id={id}
 #            POST   /api/v1/agent_gateway/{app_id}/stream
+#   Tool   : POST   /api/v1/agent/tools
+#            POST   /api/v1/agent/tools/import?tool_id={id}
+#            PUT    /api/v1/agent/tools/{id}
+#            DELETE /api/v1/agent/tools/{id}
+#   MCP    : POST   /api/v1/mcp/catalogs
+#            POST   /api/v1/mcp/catalogs/import?mcp_id={id}
+#            PUT    /api/v1/mcp/catalogs/{id}
+#            DELETE /api/v1/mcp/catalogs/{id}
+#   Know   : POST   /api/v1/rag/repos
+#            POST   /api/v1/rag/repos/import?repo_id={id}
+#            PUT    /api/v1/rag/repos/{id}
+#            DELETE /api/v1/rag/repos/{id}
 # ──────────────────────────────────────────────────────────────────────────────
+
+_HTTP_STATUS_PATTERN = re.compile(r'^\s*HTTP\s+Status\s+(\d+)\s*$', re.IGNORECASE)
+
 
 class ScenarioEngine:
     def __init__(
@@ -305,6 +327,30 @@ class ScenarioEngine:
         return content
 
     @staticmethod
+    def _substitute_llm_placeholders(content: str, llm_configs: list[LLMConfig]) -> str:
+        """@@placeholder@@ 형식의 LLM 플레이스홀더를 실제 serving_name으로 치환합니다."""
+        for llm_cfg in llm_configs:
+            content = content.replace(f"@@{llm_cfg.placeholder_in_graph}@@", llm_cfg.replace_to)
+        return content
+
+    @staticmethod
+    def _extract_http_status_criteria(criteria: list[str]) -> tuple[list[int], list[str]]:
+        """criteria에서 'HTTP Status {code}' 패턴을 추출합니다.
+
+        Returns:
+            (expected_codes, remaining_criteria)
+        """
+        http_codes: list[int] = []
+        remaining: list[str] = []
+        for c in criteria:
+            m = _HTTP_STATUS_PATTERN.match(c)
+            if m:
+                http_codes.append(int(m.group(1)))
+            else:
+                remaining.append(c)
+        return http_codes, remaining
+
+    @staticmethod
     def _parse_stream_line(line: str) -> str:
         """SSE 스트림 한 줄에서 텍스트를 추출합니다."""
         raw = line.removeprefix("data:").strip()
@@ -371,7 +417,7 @@ class ScenarioEngine:
 
         raw_text = "\n".join(raw_lines)
         if stream_error:
-            raise StreamError(stream_error, raw_response=raw_text)
+            raise StreamError(stream_error, raw_response=raw_text, status_code=status_code)
         return full_response, status_code, raw_text
 
     def _get_app_apikey(self, app_id: str) -> str:
@@ -457,12 +503,16 @@ class ScenarioEngine:
                 try:
                     put_resp.raise_for_status()
                 except httpx.HTTPStatusError as put_e:
-                    msg = _extract_response_message(put_e.response)
                     raise httpx.HTTPStatusError(
-                        f"PUT failed ({put_e.response.status_code}): {msg}",
+                        f"Import failed ({put_e.response.status_code}): '{resource_id}'가 이미 존재합니다. 다른 id를 사용하세요",
                         request=put_e.request,
                         response=put_e.response,
                     ) from put_e
+            elif e.response.status_code == 405 and not update_if_exists:
+                self._notify(
+                    f"  → '{resource_id}'가 이미 존재합니다. update-if-exists 옵션이 false 이기 때문에 skip 합니다",
+                    "warning",
+                )
             else:
                 msg = _extract_response_message(e.response)
                 raise httpx.HTTPStatusError(
@@ -472,35 +522,118 @@ class ScenarioEngine:
                 ) from e
         return resource_id
 
-    def _stream_graph(self, graph_id: str, query: str) -> tuple[str, str]:
-        """Graph stream API 호출 → (파싱된 텍스트, 원본 SSE 텍스트) 반환."""
-        payload = {
-            "graph_id": graph_id,
-            "input_data": {
-                "messages": [{"content": query, "type": "human"}],
-                "additional_kwargs": {},
-            },
-        }
-        text, _, raw = self._call_stream(
+    def _stream_graph(
+        self,
+        graph_id: str,
+        query: str,
+        request_payload: Optional[dict] = None,
+    ) -> tuple[str, int, str]:
+        """Graph stream API 호출 → (파싱된 텍스트, HTTP 상태 코드, 원본 SSE 텍스트) 반환."""
+        if request_payload is not None:
+            payload = {**request_payload, "graph_id": graph_id}
+        else:
+            payload = {
+                "graph_id": graph_id,
+                "input_data": {
+                    "messages": [{"content": query, "type": "human"}],
+                    "additional_kwargs": {},
+                },
+            }
+        return self._call_stream(
             f"{self.base_url}/api/v1/agent/agents/graphs/stream", payload
         )
-        return text, raw
 
-    def _stream_app(self, app_id: str, query: str, api_key: str) -> tuple[str, str]:
-        """App(agent_gateway) stream API 호출 → (파싱된 텍스트, 원본 SSE 텍스트) 반환."""
-        payload = {
-            "input": {
-                "messages": [{"content": query, "type": "human"}],
-                "additional_kwargs": {},
-            },
-            "config": {},
-        }
-        text, _, raw = self._call_stream(
+    def _stream_app(
+        self,
+        app_id: str,
+        query: str,
+        api_key: str,
+        request_payload: Optional[dict] = None,
+    ) -> tuple[str, int, str]:
+        """App(agent_gateway) stream API 호출 → (파싱된 텍스트, HTTP 상태 코드, 원본 SSE 텍스트) 반환."""
+        if request_payload is not None:
+            payload = request_payload
+        else:
+            payload = {
+                "input": {
+                    "messages": [{"content": query, "type": "human"}],
+                    "additional_kwargs": {},
+                },
+                "config": {},
+            }
+        return self._call_stream(
             f"{self.base_url}/api/v1/agent_gateway/{app_id}/stream",
             payload,
             headers={"Authorization": f"Bearer {api_key}"},
         )
-        return text, raw
+
+    def _run_stream_judge(
+        self,
+        step_prefix: str,
+        question: str,
+        response_text: str,
+        raw_response: str,
+        status_code: int,
+        call_error: Optional[str],
+        item: AnswerJudgeItem,
+        elapsed: float,
+    ) -> list[StepResult]:
+        """스트림 응답에 대해 HTTP Status 검증과 LLM 판정을 수행합니다."""
+        results: list[StepResult] = []
+        http_codes, llm_criteria = self._extract_http_status_criteria(item.criteria)
+
+        # HTTP Status 자동 검증
+        if http_codes:
+            http_pass = status_code in http_codes
+            results.append(StepResult(
+                step=f"{step_prefix} HTTP [{question}]",
+                status=StepStatus.PASS if http_pass else StepStatus.FAIL,
+                request={"query": question},
+                raw_response=raw_response if not response_text else None,
+                elapsed_time=elapsed,
+                judge_result=JudgeResult(
+                    status=JudgeStatus.PASS if http_pass else JudgeStatus.FAIL,
+                    reason=f"Expected HTTP {http_codes[0]}, got {status_code}",
+                ),
+            ))
+
+        # LLM 판정
+        if llm_criteria:
+            if call_error:
+                results.append(StepResult(
+                    step=f"{step_prefix} [{question}]",
+                    status=StepStatus.FAIL,
+                    request={"query": question},
+                    raw_response=raw_response,
+                    error=call_error,
+                    elapsed_time=elapsed,
+                ))
+            else:
+                judge_result = self.judge.judge(
+                    question=question,
+                    response=response_text,
+                    criteria=llm_criteria,
+                )
+                results.append(StepResult(
+                    step=f"{step_prefix} [{question}]",
+                    status=StepStatus.PASS if judge_result.status == JudgeStatus.PASS else StepStatus.FAIL,
+                    request={"query": question},
+                    raw_response=raw_response,
+                    elapsed_time=elapsed,
+                    judge_result=judge_result,
+                ))
+        elif call_error and not http_codes:
+            # LLM 기준 없고 HTTP 기준도 없는데 에러가 발생한 경우
+            results.append(StepResult(
+                step=f"{step_prefix} [{question}]",
+                status=StepStatus.FAIL,
+                request={"query": question},
+                raw_response=raw_response,
+                error=call_error,
+                elapsed_time=elapsed,
+            ))
+
+        return results
 
     # ── Prompt Stage ──────────────────────────────
 
@@ -555,6 +688,159 @@ class ScenarioEngine:
                 elapsed_time=time.time() - start,
             )
 
+    # ── Tool Stage ────────────────────────────────
+
+    def run_tool_stage(
+        self, tool_cfg: ToolConfig, scenario_dir: str
+    ) -> tuple[str, StepResult]:
+        step_name = f"Tool: {tool_cfg.name}"
+        start = time.time()
+
+        try:
+            self._notify(f"[Tool] '{tool_cfg.name}' 처리 중...")
+
+            file_path = self._resolve_path(tool_cfg.json_path, scenario_dir)
+            with open(file_path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            payload["name"] = tool_cfg.name
+
+            if tool_cfg.id:
+                tool_id = self._import_resource(
+                    import_url=f"{self.base_url}/api/v1/agent/tools/import",
+                    id_param="tool_id",
+                    resource_id=tool_cfg.id,
+                    payload=payload,
+                    update_if_exists=tool_cfg.update_if_exists,
+                    put_url=f"{self.base_url}/api/v1/agent/tools/{tool_cfg.id}",
+                )
+            else:
+                resp = self.client.post(
+                    f"{self.base_url}/api/v1/agent/tools", json=payload
+                )
+                resp.raise_for_status()
+                tool_id = resp.json()["id"]
+                self._notify(f"[Tool] 생성 완료: {tool_id}")
+
+            return tool_id, StepResult(
+                step=step_name,
+                status=StepStatus.PASS,
+                request=payload,
+                response=f"tool_id={tool_id}",
+                elapsed_time=time.time() - start,
+            )
+
+        except Exception as e:
+            traceback.print_exc()
+            self._notify(f"[Tool] 오류: {e}", "error")
+            return "", StepResult(
+                step=step_name,
+                status=StepStatus.ERROR,
+                error=str(e),
+                elapsed_time=time.time() - start,
+            )
+
+    # ── MCP Stage ─────────────────────────────────
+
+    def run_mcp_stage(
+        self, mcp_cfg: MCPConfig, scenario_dir: str
+    ) -> tuple[str, StepResult]:
+        step_name = f"MCP: {mcp_cfg.name}"
+        start = time.time()
+
+        try:
+            self._notify(f"[MCP] '{mcp_cfg.name}' 처리 중...")
+
+            file_path = self._resolve_path(mcp_cfg.json_path, scenario_dir)
+            with open(file_path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            payload["name"] = mcp_cfg.name
+
+            if mcp_cfg.id:
+                mcp_id = self._import_resource(
+                    import_url=f"{self.base_url}/api/v1/mcp/catalogs/import",
+                    id_param="mcp_id",
+                    resource_id=mcp_cfg.id,
+                    payload=payload,
+                    update_if_exists=mcp_cfg.update_if_exists,
+                    put_url=f"{self.base_url}/api/v1/mcp/catalogs/{mcp_cfg.id}",
+                )
+            else:
+                resp = self.client.post(
+                    f"{self.base_url}/api/v1/mcp/catalogs", json=payload
+                )
+                resp.raise_for_status()
+                mcp_id = resp.json()["id"]
+                self._notify(f"[MCP] 생성 완료: {mcp_id}")
+
+            return mcp_id, StepResult(
+                step=step_name,
+                status=StepStatus.PASS,
+                request=payload,
+                response=f"mcp_id={mcp_id}",
+                elapsed_time=time.time() - start,
+            )
+
+        except Exception as e:
+            traceback.print_exc()
+            self._notify(f"[MCP] 오류: {e}", "error")
+            return "", StepResult(
+                step=step_name,
+                status=StepStatus.ERROR,
+                error=str(e),
+                elapsed_time=time.time() - start,
+            )
+
+    # ── Knowledge Stage ───────────────────────────
+
+    def run_knowledge_stage(
+        self, know_cfg: KnowledgeConfig, scenario_dir: str
+    ) -> tuple[str, StepResult]:
+        step_name = f"Knowledge: {know_cfg.name}"
+        start = time.time()
+
+        try:
+            self._notify(f"[Knowledge] '{know_cfg.name}' 처리 중...")
+
+            file_path = self._resolve_path(know_cfg.json_path, scenario_dir)
+            with open(file_path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            payload["name"] = know_cfg.name
+
+            if know_cfg.id:
+                know_id = self._import_resource(
+                    import_url=f"{self.base_url}/api/v1/rag/repos/import",
+                    id_param="repo_id",
+                    resource_id=know_cfg.id,
+                    payload=payload,
+                    update_if_exists=know_cfg.update_if_exists,
+                    put_url=f"{self.base_url}/api/v1/rag/repos/{know_cfg.id}",
+                )
+            else:
+                resp = self.client.post(
+                    f"{self.base_url}/api/v1/rag/repos", json=payload
+                )
+                resp.raise_for_status()
+                know_id = resp.json()["id"]
+                self._notify(f"[Knowledge] 생성 완료: {know_id}")
+
+            return know_id, StepResult(
+                step=step_name,
+                status=StepStatus.PASS,
+                request=payload,
+                response=f"knowledge_id={know_id}",
+                elapsed_time=time.time() - start,
+            )
+
+        except Exception as e:
+            traceback.print_exc()
+            self._notify(f"[Knowledge] 오류: {e}", "error")
+            return "", StepResult(
+                step=step_name,
+                status=StepStatus.ERROR,
+                error=str(e),
+                elapsed_time=time.time() - start,
+            )
+
     # ── Graph Stage ───────────────────────────────
 
     def run_graph_stage(
@@ -562,7 +848,8 @@ class ScenarioEngine:
         graph_cfg: GraphConfig,
         scenario_dir: str,
         prompt_vars: dict[str, str],
-        answer_judge: Optional[AnswerJudge],
+        llm_configs: list[LLMConfig],
+        answer_judge: list[AnswerJudgeItem],
     ) -> tuple[str, list[StepResult]]:
         results: list[StepResult] = []
         graph_id = ""
@@ -576,7 +863,12 @@ class ScenarioEngine:
             with open(file_path, "r", encoding="utf-8") as f:
                 graph_content = f.read()
 
+            # 1. LLM placeholder 치환: @@key@@ → replace_to
+            graph_content = self._substitute_llm_placeholders(graph_content, llm_configs)
+
+            # 2. Prompt 변수 치환: {var} → prompt_id
             graph_content = self._substitute_variables(graph_content, prompt_vars)
+
             payload = json.loads(graph_content)
 
             # force-create: 항상 새 리소스 생성 (datetime 접미사)
@@ -618,33 +910,40 @@ class ScenarioEngine:
             ))
 
             if answer_judge and graph_id:
-                for question in answer_judge.questions:
+                for item in answer_judge:
                     q_start = time.time()
+                    question = item.question
                     self._notify(f"[Graph] 스트림 테스트: '{question}'")
+
+                    # request body 결정: path > inline > None
+                    request_payload: Optional[dict] = None
+                    if item.request_body_path:
+                        rp_path = self._resolve_path(item.request_body_path, scenario_dir)
+                        with open(rp_path, "r", encoding="utf-8") as f:
+                            request_payload = json.load(f)
+                    elif item.request_body:
+                        request_payload = item.request_body
+
+                    response_text = ""
+                    raw_response = ""
+                    status_code = 0
+                    call_error: Optional[str] = None
+
                     try:
-                        response_text, raw_response = self._stream_graph(graph_id, question)
-                        judge_result = self.judge.judge(
-                            question=question,
-                            response=response_text,
-                            criteria=answer_judge.criteria,
+                        response_text, status_code, raw_response = self._stream_graph(
+                            graph_id, question, request_payload
                         )
-                        results.append(StepResult(
-                            step=f"Graph Stream [{question}]",
-                            status=StepStatus.PASS if judge_result.status == JudgeStatus.PASS else StepStatus.FAIL,
-                            request={"query": question},
-                            raw_response=raw_response,
-                            elapsed_time=time.time() - q_start,
-                            judge_result=judge_result,
-                        ))
                     except StreamError as e:
-                        results.append(StepResult(
-                            step=f"Graph Stream [{question}]",
-                            status=StepStatus.FAIL,
-                            request={"query": question},
-                            raw_response=e.raw_response,
-                            error=str(e),
-                            elapsed_time=time.time() - q_start,
-                        ))
+                        call_error = str(e)
+                        status_code = e.status_code
+                        raw_response = e.raw_response
+                    except httpx.HTTPStatusError as e:
+                        call_error = self._format_http_error(e)
+                        status_code = e.response.status_code
+                        try:
+                            raw_response = e.response.text[:2000]
+                        except Exception:
+                            raw_response = ""
                     except Exception as e:
                         traceback.print_exc()
                         results.append(StepResult(
@@ -653,6 +952,19 @@ class ScenarioEngine:
                             error=str(e),
                             elapsed_time=time.time() - q_start,
                         ))
+                        continue
+
+                    stream_steps = self._run_stream_judge(
+                        step_prefix="Graph Stream",
+                        question=question,
+                        response_text=response_text,
+                        raw_response=raw_response,
+                        status_code=status_code,
+                        call_error=call_error,
+                        item=item,
+                        elapsed=time.time() - q_start,
+                    )
+                    results.extend(stream_steps)
 
         except Exception as e:
             traceback.print_exc()
@@ -672,7 +984,8 @@ class ScenarioEngine:
         self,
         app_cfg: AppConfig,
         graph_id: str,
-        answer_judge: Optional[AnswerJudge],
+        answer_judge: list[AnswerJudgeItem],
+        scenario_dir: str = "",
     ) -> tuple[str, list[StepResult]]:
         results: list[StepResult] = []
         app_id = ""
@@ -681,15 +994,13 @@ class ScenarioEngine:
 
         try:
             self._notify(f"[App] '{app_cfg.name}' 배포 중...")
-            existing = self._find_app_by_name(app_cfg.name)
 
-            if existing:
-                app_id = existing["id"]
-                self._notify(f"[App] 기존 리소스 재사용: {app_id}")
-            else:
+            if app_cfg.force_create:
+                # force-create: 타임스탬프 suffix로 항상 신규 생성
+                app_name = f"{app_cfg.name}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 payload = {
-                    "name": app_cfg.name,
-                    "description": app_cfg.name,
+                    "name": app_name,
+                    "description": app_name,
                     "target_id": graph_id,
                     "target_type": "agent_graph",
                     "serving_type": "shared",
@@ -708,7 +1019,36 @@ class ScenarioEngine:
                 )
                 resp.raise_for_status()
                 app_id = resp.json()["data"]["app_id"]
-                self._notify(f"[App] 배포 완료: {app_id}")
+                self._notify(f"[App] 배포 완료 (force-create): {app_id}")
+            else:
+                existing = self._find_app_by_name(app_cfg.name)
+
+                if existing:
+                    app_id = existing["id"]
+                    self._notify(f"[App] 기존 리소스 재사용: {app_id}")
+                else:
+                    payload = {
+                        "name": app_cfg.name,
+                        "description": app_cfg.name,
+                        "target_id": graph_id,
+                        "target_type": "agent_graph",
+                        "serving_type": "shared",
+                        "cpu_limit": 2,
+                        "cpu_request": 1,
+                        "gpu_limit": 0,
+                        "gpu_request": 0,
+                        "max_replicas": 1,
+                        "mem_limit": 2,
+                        "mem_request": 2,
+                        "min_replicas": 1,
+                        "workers_per_core": 3,
+                    }
+                    resp = self.client.post(
+                        f"{self.base_url}/api/v1/agent/agents/apps", json=payload
+                    )
+                    resp.raise_for_status()
+                    app_id = resp.json()["data"]["app_id"]
+                    self._notify(f"[App] 배포 완료: {app_id}")
 
             results.append(StepResult(
                 step=step_name,
@@ -719,33 +1059,41 @@ class ScenarioEngine:
 
             if answer_judge and app_id:
                 api_key = self._get_app_apikey(app_id)
-                for question in answer_judge.questions:
+
+                for item in answer_judge:
                     q_start = time.time()
+                    question = item.question
                     self._notify(f"[App] 스트림 테스트: '{question}'")
+
+                    # request body 결정: path > inline > None
+                    request_payload: Optional[dict] = None
+                    if item.request_body_path and scenario_dir:
+                        rp_path = self._resolve_path(item.request_body_path, scenario_dir)
+                        with open(rp_path, "r", encoding="utf-8") as f:
+                            request_payload = json.load(f)
+                    elif item.request_body:
+                        request_payload = item.request_body
+
+                    response_text = ""
+                    raw_response = ""
+                    status_code = 0
+                    call_error: Optional[str] = None
+
                     try:
-                        response_text, raw_response = self._stream_app(app_id, question, api_key)
-                        judge_result = self.judge.judge(
-                            question=question,
-                            response=response_text,
-                            criteria=answer_judge.criteria,
+                        response_text, status_code, raw_response = self._stream_app(
+                            app_id, question, api_key, request_payload
                         )
-                        results.append(StepResult(
-                            step=f"App Stream [{question}]",
-                            status=StepStatus.PASS if judge_result.status == JudgeStatus.PASS else StepStatus.FAIL,
-                            request={"query": question},
-                            raw_response=raw_response,
-                            elapsed_time=time.time() - q_start,
-                            judge_result=judge_result,
-                        ))
                     except StreamError as e:
-                        results.append(StepResult(
-                            step=f"App Stream [{question}]",
-                            status=StepStatus.FAIL,
-                            request={"query": question},
-                            raw_response=e.raw_response,
-                            error=str(e),
-                            elapsed_time=time.time() - q_start,
-                        ))
+                        call_error = str(e)
+                        status_code = e.status_code
+                        raw_response = e.raw_response
+                    except httpx.HTTPStatusError as e:
+                        call_error = self._format_http_error(e)
+                        status_code = e.response.status_code
+                        try:
+                            raw_response = e.response.text[:2000]
+                        except Exception:
+                            raw_response = ""
                     except Exception as e:
                         traceback.print_exc()
                         results.append(StepResult(
@@ -754,6 +1102,19 @@ class ScenarioEngine:
                             error=str(e),
                             elapsed_time=time.time() - q_start,
                         ))
+                        continue
+
+                    stream_steps = self._run_stream_judge(
+                        step_prefix="App Stream",
+                        question=question,
+                        response_text=response_text,
+                        raw_response=raw_response,
+                        status_code=status_code,
+                        call_error=call_error,
+                        item=item,
+                        elapsed=time.time() - q_start,
+                    )
+                    results.extend(stream_steps)
 
         except Exception as e:
             traceback.print_exc()
@@ -784,6 +1145,9 @@ class ScenarioEngine:
         graph_id: str,
         app_cfg: Optional[AppConfig],
         app_id: str,
+        tool_pairs: Optional[list[tuple[ToolConfig, str]]] = None,
+        mcp_pairs: Optional[list[tuple[MCPConfig, str]]] = None,
+        know_pairs: Optional[list[tuple[KnowledgeConfig, str]]] = None,
     ) -> list[StepResult]:
         results: list[StepResult] = []
 
@@ -800,7 +1164,7 @@ class ScenarioEngine:
                     step=f"Cleanup {label}", status=StepStatus.ERROR, error=str(e)
                 ))
 
-        # App → Graph → Prompt 순으로 삭제
+        # App → Graph → Prompt → Tool → MCP → Knowledge 순으로 삭제
         if app_cfg and app_cfg.auto_delete and app_id:
             _delete(
                 f"App ({app_id})",
@@ -817,6 +1181,24 @@ class ScenarioEngine:
                     f"Prompt ({prompt_id})",
                     f"{self.base_url}/api/v1/agent/inference-prompts/{prompt_id}",
                 )
+        for tool_cfg, tool_id in (tool_pairs or []):
+            if tool_cfg.auto_delete and tool_id:
+                _delete(
+                    f"Tool ({tool_id})",
+                    f"{self.base_url}/api/v1/agent/tools/{tool_id}",
+                )
+        for mcp_cfg, mcp_id in (mcp_pairs or []):
+            if mcp_cfg.auto_delete and mcp_id:
+                _delete(
+                    f"MCP ({mcp_id})",
+                    f"{self.base_url}/api/v1/mcp/catalogs/{mcp_id}",
+                )
+        for know_cfg, know_id in (know_pairs or []):
+            if know_cfg.auto_delete and know_id:
+                _delete(
+                    f"Knowledge ({know_id})",
+                    f"{self.base_url}/api/v1/rag/repos/{know_id}",
+                )
 
         return results
 
@@ -830,36 +1212,67 @@ class ScenarioEngine:
 
         prompt_vars: dict[str, str] = {}
         prompt_pairs: list[tuple[PromptConfig, str]] = []
+        tool_pairs: list[tuple[ToolConfig, str]] = []
+        mcp_pairs: list[tuple[MCPConfig, str]] = []
+        know_pairs: list[tuple[KnowledgeConfig, str]] = []
 
-        # 1. Prompt Stage
+        # 1. Tool Stage
+        for tool_cfg in scenario.tools:
+            tool_id, step = self.run_tool_stage(tool_cfg, scenario_dir)
+            result.steps.append(step)
+            if step.status == StepStatus.ERROR:
+                self._finalize(result, prompt_pairs, scenario, "", "", tool_pairs, mcp_pairs, know_pairs)
+                return result
+            tool_pairs.append((tool_cfg, tool_id))
+
+        # 2. MCP Stage
+        for mcp_cfg in scenario.mcps:
+            mcp_id, step = self.run_mcp_stage(mcp_cfg, scenario_dir)
+            result.steps.append(step)
+            if step.status == StepStatus.ERROR:
+                self._finalize(result, prompt_pairs, scenario, "", "", tool_pairs, mcp_pairs, know_pairs)
+                return result
+            mcp_pairs.append((mcp_cfg, mcp_id))
+
+        # 3. Knowledge Stage
+        for know_cfg in scenario.knowledges:
+            know_id, step = self.run_knowledge_stage(know_cfg, scenario_dir)
+            result.steps.append(step)
+            if step.status == StepStatus.ERROR:
+                self._finalize(result, prompt_pairs, scenario, "", "", tool_pairs, mcp_pairs, know_pairs)
+                return result
+            know_pairs.append((know_cfg, know_id))
+
+        # 4. Prompt Stage
         for prompt_cfg in scenario.prompts:
             prompt_id, step = self.run_prompt_stage(prompt_cfg, scenario_dir)
             result.steps.append(step)
             if step.status == StepStatus.ERROR:
-                self._finalize(result, prompt_pairs, scenario, "", "")
+                self._finalize(result, prompt_pairs, scenario, "", "", tool_pairs, mcp_pairs, know_pairs)
                 return result
             placeholder_key = prompt_cfg.placeholder_in_graph or prompt_cfg.name
             prompt_vars[placeholder_key] = prompt_id
             prompt_pairs.append((prompt_cfg, prompt_id))
 
-        # 2. Graph Stage
+        # 5. Graph Stage
         graph_id = ""
         if scenario.graph:
             graph_id, graph_steps = self.run_graph_stage(
                 graph_cfg=scenario.graph,
                 scenario_dir=scenario_dir,
                 prompt_vars=prompt_vars,
+                llm_configs=scenario.llms,
                 answer_judge=scenario.answer_judge,
             )
             result.steps.extend(graph_steps)
             if graph_steps and graph_steps[0].status == StepStatus.ERROR:
-                self._finalize(result, prompt_pairs, scenario, graph_id, "")
+                self._finalize(result, prompt_pairs, scenario, graph_id, "", tool_pairs, mcp_pairs, know_pairs)
                 return result
 
-        # 3. App Stage
+        # 6. App Stage
         app_id = ""
         graph_stream_steps = [
-            s for s in result.steps if s.step.startswith("Graph Stream [")
+            s for s in result.steps if s.step.startswith("Graph Stream")
         ]
         graph_stream_all_pass = all(s.status == StepStatus.PASS for s in graph_stream_steps)
         can_deploy_app = bool(graph_id) and (not graph_stream_steps or graph_stream_all_pass)
@@ -869,6 +1282,7 @@ class ScenarioEngine:
                 app_cfg=scenario.app,
                 graph_id=graph_id,
                 answer_judge=scenario.answer_judge,
+                scenario_dir=scenario_dir,
             )
             result.steps.extend(app_steps)
         elif scenario.app and graph_id and not can_deploy_app:
@@ -882,8 +1296,8 @@ class ScenarioEngine:
                 "warning",
             )
 
-        # 4. Cleanup + finalize
-        self._finalize(result, prompt_pairs, scenario, graph_id, app_id)
+        # 7. Cleanup + finalize
+        self._finalize(result, prompt_pairs, scenario, graph_id, app_id, tool_pairs, mcp_pairs, know_pairs)
         return result
 
     def _finalize(
@@ -893,6 +1307,9 @@ class ScenarioEngine:
         scenario: Scenario,
         graph_id: str,
         app_id: str,
+        tool_pairs: Optional[list[tuple[ToolConfig, str]]] = None,
+        mcp_pairs: Optional[list[tuple[MCPConfig, str]]] = None,
+        know_pairs: Optional[list[tuple[KnowledgeConfig, str]]] = None,
     ):
         cleanup_steps = self.run_cleanup(
             prompt_pairs=prompt_pairs,
@@ -900,7 +1317,9 @@ class ScenarioEngine:
             graph_id=graph_id,
             app_cfg=scenario.app,
             app_id=app_id,
+            tool_pairs=tool_pairs or [],
+            mcp_pairs=mcp_pairs or [],
+            know_pairs=know_pairs or [],
         )
         result.steps.extend(cleanup_steps)
         result.compute_final_status()
-
