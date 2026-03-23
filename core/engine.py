@@ -342,7 +342,7 @@ class ScenarioEngine:
         """placeholder_in_graph 문자열을 knowledge ID로 치환합니다."""
         for know_cfg in knowledge_configs:
             if know_cfg.placeholder_in_graph:
-                content = content.replace(know_cfg.placeholder_in_graph, know_cfg.id)
+                content = content.replace(f"@@{know_cfg.placeholder_in_graph}@@", know_cfg.id)
         return content
 
     @staticmethod
@@ -505,7 +505,14 @@ class ScenarioEngine:
             resp = self.client.post(import_url, params=params, json=payload)
             resp.raise_for_status()
             detail = resp.json().get("detail", "")
-            self._notify(f"  → Import {detail}: {resource_id}")
+            if detail == "Validated" and update_if_exists:
+                # 이미 존재하는 리소스: import API가 content를 업데이트하지 않으므로 PUT으로 강제 업데이트
+                kw = put_kwargs if put_kwargs is not None else {"json": payload}
+                put_resp = self.client.put(put_url, **kw)
+                put_resp.raise_for_status()
+                self._notify(f"  → Import {detail} → PUT 업데이트: {resource_id}")
+            else:
+                self._notify(f"  → Import {detail}: {resource_id}")
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 405 and update_if_exists:
                 self._notify(f"  → 충돌, PUT 업데이트: {resource_id}", "warning")
@@ -782,6 +789,19 @@ class ScenarioEngine:
                 resp.raise_for_status()
                 mcp_id = resp.json()["id"]
                 self._notify(f"[MCP] 생성 완료: {mcp_id}")
+
+            # 서버의 실제 enabled 상태 확인 → false이면 activate + tool-sync
+            status_resp = self.client.get(f"{self.base_url}/api/v1/mcp/catalogs/{mcp_id}")
+            status_resp.raise_for_status()
+            mcp_enabled = status_resp.json().get("enabled", True)
+            if not mcp_enabled:
+                act_resp = self.client.post(f"{self.base_url}/api/v1/mcp/catalogs/{mcp_id}/activate")
+                act_resp.raise_for_status()
+                self._notify(f"[MCP] Activate 완료: {mcp_id}")
+
+                sync_resp = self.client.get(f"{self.base_url}/api/v1/mcp/catalogs/{mcp_id}/sync-tools")
+                sync_resp.raise_for_status()
+                self._notify(f"[MCP] Tool-sync 완료: {mcp_id}")
 
             return mcp_id, StepResult(
                 step=step_name,

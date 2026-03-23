@@ -29,7 +29,7 @@ tools:
     id: c32801d3-d475-4ae8-aa01-e75007fda045
     json_path: "./scenarios/03_rag_tool_mcp/tool_c32801d3-d475-4ae8-aa01-e75007fda045.json"
     auto-delete: false
-    update-if-exists: false
+    update-if-exists: true
 
 mcps:
   - name: "QA qa data io mcp"
@@ -39,8 +39,8 @@ mcps:
     update-if-exists: false
 
 knowledges:
-  - id: "e4792dc2-b607-4f4c-b55a-d9e4866894af"
-    name: "[QA]mock_knowledge"
+  - id: 837532e5-b862-4ac7-a654-0fdaffe6f60e
+    name: "[dy]mock-data"
     placeholder_in_graph: retriever__knowledge_1
     auto-delete: false
     update-if-exists: false

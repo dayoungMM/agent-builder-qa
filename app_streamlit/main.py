@@ -10,8 +10,66 @@ from pathlib import Path
 import httpx
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as st_components
 
 SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() != "false"
+
+
+def _render_copy_table(rows: list[dict], copy_cols: list[str]) -> None:
+    """테이블 렌더링. copy_cols에 해당하는 컬럼은 hover 시 copy 아이콘 표시."""
+    if not rows:
+        st.info("결과 없음")
+        return
+    headers = list(rows[0].keys())
+    height = 37 * (len(rows) + 1) + 16
+
+    ths = "".join(f"<th>{h}</th>" for h in headers)
+    trs = ""
+    for row in rows:
+        tds = ""
+        for h in headers:
+            val = str(row.get(h, "")).replace('"', "&quot;").replace("<", "&lt;")
+            if h in copy_cols:
+                tds += (
+                    f'<td class="cp" data-v="{val}">'
+                    f'<span>{val}</span>'
+                    f'<button class="ci" onclick="doCopy(this)" title="복사">⎘</button>'
+                    f"</td>"
+                )
+            else:
+                tds += f"<td>{val}</td>"
+        trs += f"<tr>{tds}</tr>"
+
+    html = f"""
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;font-family:sans-serif;font-size:13px}}
+table{{width:100%;border-collapse:collapse}}
+th{{background:#f0f2f6;padding:7px 10px;text-align:left;border-bottom:2px solid #ddd;white-space:nowrap}}
+td{{padding:6px 10px;border-bottom:1px solid #eee;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+tr:hover td{{background:#f5f7fa}}
+.cp{{position:relative}}
+.ci{{display:none;position:absolute;right:4px;top:50%;transform:translateY(-50%);
+     background:#fff;border:1px solid #ccc;border-radius:3px;cursor:pointer;
+     padding:1px 6px;font-size:12px;color:#555;line-height:1.4}}
+.cp:hover .ci{{display:block}}
+.ci:hover{{background:#e8e8e8}}
+</style>
+<table>
+<thead><tr>{ths}</tr></thead>
+<tbody>{trs}</tbody>
+</table>
+<script>
+function doCopy(btn){{
+  var v = btn.parentElement.getAttribute('data-v');
+  navigator.clipboard.writeText(v).then(function(){{
+    btn.textContent = '✓';
+    btn.style.color = 'green';
+    setTimeout(function(){{ btn.textContent = '⎘'; btn.style.color = '#555'; }}, 1200);
+  }});
+}}
+</script>"""
+    st_components.html(html, height=height, scrolling=False)
+
 
 _DEFAULT_ADXP_ENDPOINT = (
     "http://agent-gateway.aiplatform.svc.cluster.local/api/v1/gateway/chat/completion"
@@ -548,10 +606,43 @@ with tab_editor:
                             st.session_state[editor_key] = edit_path.read_text(encoding="utf-8")
                             st.toast("파일을 다시 읽었습니다.")
 
+
+                    edited = st.text_area(
+                        f"`{edit_path}`",
+                        height=480,
+                        key=editor_key,
+                    )
+
+                    save_col, preview_col = st.columns([1, 4])
+                    with save_col:
+                        if st.button("💾 저장", type="primary", use_container_width=True):
+                            try:
+                                if is_json:
+                                    _json.loads(edited)  # JSON 유효성 검사
+                                else:
+                                    _yaml.safe_load(edited)  # YAML 유효성 검사
+                                edit_path.write_text(edited, encoding="utf-8")
+                                st.success(f"저장 완료: `{edit_path}`")
+                                if edit_path.suffix in (".yaml", ".yml"):
+                                    load_scenario_list()
+                            except (_json.JSONDecodeError, _yaml.YAMLError) as exc:
+                                st.error(f"파싱 오류: {exc}")
+                            except Exception as exc:
+                                st.error(f"저장 실패: {exc}")
+
+                    with preview_col:
+                        with st.expander("파싱 미리보기", expanded=False):
+                            try:
+                                if is_json:
+                                    st.json(_json.loads(edited))
+                                else:
+                                    st.json(_yaml.safe_load(edited))
+                            except Exception as exc:
+                                st.error(f"파싱 오류: {exc}")
+
                     # scenario.yaml에 knowledges 섹션이 있을 때 Knowledge 조회 UI
                     is_yaml = edit_path.suffix in (".yaml", ".yml")
-                    editor_content = st.session_state.get(editor_key, "")
-                    if is_yaml and edit_path.name == "scenario.yaml" and "knowledges:" in editor_content:
+                    if is_yaml and edit_path.name == "scenario.yaml" and "knowledges:" in edited:
                         with st.container(border=True):
                             st.markdown("**Knowledge 조회**")
                             kb_url_key = f"kb_url_scenario__{selected_file}"
@@ -617,12 +708,13 @@ with tab_editor:
                                              if isinstance(know_data, dict) else -1)
                                 page_label = f"{current_page} / {last_page}" if last_page and last_page > 0 else str(current_page)
 
-                                if items:
-                                    display_cols = ["id", "name", "vector_db_type", "kind"]
-                                    rows = [{c: row.get(c, "") for c in display_cols} for row in items]
-                                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-                                else:
-                                    st.info("결과 없음")
+                                rows = [{
+                                    "id": row.get("id", ""),
+                                    "name": row.get("name", ""),
+                                    "vector_db_type": row.get("vector_db_type", ""),
+                                    "kind": row.get("kind", ""),
+                                } for row in items]
+                                _render_copy_table(rows, copy_cols=["id", "name"])
 
                                 _, pg_col1, pg_col2, pg_col3, _ = st.columns([3, 1, 2, 1, 3])
                                 with pg_col1:
@@ -669,7 +761,7 @@ with tab_editor:
                                             st.rerun()
 
                     # scenario.yaml에 llms 섹션이 있을 때 LLM 조회 UI
-                    if is_yaml and edit_path.name == "scenario.yaml" and "llms:" in editor_content:
+                    if is_yaml and edit_path.name == "scenario.yaml" and "llms:" in edited:
                         with st.container(border=True):
                             st.markdown("**LLM 조회**")
                             llm_url_key = f"serving_url_scenario__{selected_file}"
@@ -735,16 +827,13 @@ with tab_editor:
                                 llm_page_label = (f"{llm_current_page} / {llm_last_page}"
                                                   if llm_last_page and llm_last_page > 0 else str(llm_current_page))
 
-                                if llm_items:
-                                    rows = [{
-                                        "serving_name": row.get("name", ""),
-                                        "model_name": row.get("model_name", ""),
-                                        "provider_name": row.get("provider_name", ""),
-                                        "serving_type": row.get("serving_type", ""),
-                                    } for row in llm_items]
-                                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-                                else:
-                                    st.info("결과 없음")
+                                llm_rows = [{
+                                    "serving_name": row.get("name", ""),
+                                    "model_name": row.get("model_name", ""),
+                                    "provider_name": row.get("provider_name", ""),
+                                    "serving_type": row.get("serving_type", ""),
+                                } for row in llm_items]
+                                _render_copy_table(llm_rows, copy_cols=["serving_name"])
 
                                 _, lp_col1, lp_col2, lp_col3, _ = st.columns([3, 1, 2, 1, 3])
                                 with lp_col1:
@@ -789,36 +878,3 @@ with tab_editor:
                                             except Exception as exc:
                                                 st.error(f"조회 실패: {exc}")
                                             st.rerun()
-
-                    edited = st.text_area(
-                        f"`{edit_path}`",
-                        height=480,
-                        key=editor_key,
-                    )
-
-                    save_col, preview_col = st.columns([1, 4])
-                    with save_col:
-                        if st.button("💾 저장", type="primary", use_container_width=True):
-                            try:
-                                if is_json:
-                                    _json.loads(edited)  # JSON 유효성 검사
-                                else:
-                                    _yaml.safe_load(edited)  # YAML 유효성 검사
-                                edit_path.write_text(edited, encoding="utf-8")
-                                st.success(f"저장 완료: `{edit_path}`")
-                                if edit_path.suffix in (".yaml", ".yml"):
-                                    load_scenario_list()
-                            except (_json.JSONDecodeError, _yaml.YAMLError) as exc:
-                                st.error(f"파싱 오류: {exc}")
-                            except Exception as exc:
-                                st.error(f"저장 실패: {exc}")
-
-                    with preview_col:
-                        with st.expander("파싱 미리보기", expanded=False):
-                            try:
-                                if is_json:
-                                    st.json(_json.loads(edited))
-                                else:
-                                    st.json(_yaml.safe_load(edited))
-                            except Exception as exc:
-                                st.error(f"파싱 오류: {exc}")
