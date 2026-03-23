@@ -260,7 +260,7 @@
                     ],
                     "knowledge_retriever": {
                         "script": "",
-                        "repo_id": "0d79ef6f-36d9-41a2-89ce-a2f9b3d2d655",
+                        "repo_id": "@@retriever__knowledge_1@@",
                         "repo_kind": "repo",
                         "index_name": "",
                         "project_id": null,

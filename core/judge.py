@@ -4,6 +4,8 @@ import os
 import traceback
 
 import httpx
+
+SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() != "false"
 from langchain_core.prompts import ChatPromptTemplate
 
 from core.models import JudgeResult, JudgeStatus
@@ -75,6 +77,7 @@ class LLMJudge:
             json=payload,
             headers={"Authorization": f"Bearer {self.api_key}"},
             timeout=60,
+            verify=SSL_VERIFY,
         )
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"]

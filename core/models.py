@@ -62,9 +62,8 @@ class MCPConfig(BaseModel):
 
 
 class KnowledgeConfig(BaseModel):
-    name: str
-    id: Optional[str] = None
-    json_path: str
+    id: str
+    placeholder_in_graph: Optional[str] = None
     auto_delete: bool = Field(default=False, alias="auto-delete")
     update_if_exists: bool = Field(default=False, alias="update-if-exists")
 

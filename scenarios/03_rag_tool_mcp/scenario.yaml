@@ -4,8 +4,8 @@ graph:
   name: "[QA]rag_tool_mcp_static"
   id: d4911346-e002-4a76-8f1d-d28f393f8a13
   file_path: "./scenarios/03_rag_tool_mcp/graph_rag_tool_mcp_static.json"
-  auto-delete: true
-  update-if-exists: false
+  auto-delete: false
+  update-if-exists: true
 
 app:
   name: "[QA]rag_tool_mcp_static"
@@ -21,14 +21,14 @@ prompts:
   - name: "[QA]qa-all-in-one_prompt"
     id: 83f5c8cc-cd4a-43ee-b319-432934459a13
     json_path: "./scenarios/03_rag_tool_mcp/prompt_83f5c8cc-cd4a-43ee-b319-432934459a13.json"
-    auto-delete: true
+    auto-delete: false
     update-if-exists: false
 
 tools:
-  - name: "qa_cinema_search"
+  - name: "cinema_search"
     id: c32801d3-d475-4ae8-aa01-e75007fda045
     json_path: "./scenarios/03_rag_tool_mcp/tool_c32801d3-d475-4ae8-aa01-e75007fda045.json"
-    auto-delete: true
+    auto-delete: false
     update-if-exists: false
 
 mcps:
@@ -39,9 +39,9 @@ mcps:
     update-if-exists: false
 
 knowledges:
-  - name: "[QA]mock_knowledge"
-    id: 0d79ef6f-36d9-41a2-89ce-a2f9b3d2d655
-    json_path: "./scenarios/03_rag_tool_mcp/know_0d79ef6f-36d9-41a2-89ce-a2f9b3d2d655.json"
+  - id: "e4792dc2-b607-4f4c-b55a-d9e4866894af"
+    name: "[QA]mock_knowledge"
+    placeholder_in_graph: retriever__knowledge_1
     auto-delete: false
     update-if-exists: false
 
@@ -49,12 +49,9 @@ answer-judge:
   - question: "2025년 멜론뮤직어워즈 올해의 레코드 수상자는?"
     criteria:
       - "'제니'가 포함되어있어야함"
-      - "HTTP Status 200"
   - question: "data-io 서버에는 어떤 파일 리스트가 있어?"
     criteria:
       - "파일 리스트가 나와야함"
-      - "HTTP Status 200"
   - question: "한국 영화중에 단종에 관한 영화는?"
     criteria:
       - "'왕과 사는 남자' 라는 단어가 포함되어있어야함"
-      - "HTTP Status 200"

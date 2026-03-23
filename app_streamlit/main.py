@@ -11,6 +11,8 @@ import httpx
 import pandas as pd
 import streamlit as st
 
+SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() != "false"
+
 _DEFAULT_ADXP_ENDPOINT = (
     "http://agent-gateway.aiplatform.svc.cluster.local/api/v1/gateway/chat/completion"
 )
@@ -76,6 +78,7 @@ def _fetch_token() -> tuple[bool, str]:
                 "client_id": st.session_state.auth_client_id,
             },
             timeout=30.0,
+            verify=SSL_VERIFY,
         )
         resp.raise_for_status()
         body = resp.json()
@@ -98,6 +101,7 @@ def _do_refresh_token() -> tuple[bool, str]:
             url,
             params={"refresh_token": st.session_state.refresh_token},
             timeout=30.0,
+            verify=SSL_VERIFY,
         )
         resp.raise_for_status()
         body = resp.json()
@@ -543,6 +547,248 @@ with tab_editor:
                         if st.button("🔄 파일 다시 읽기", use_container_width=True):
                             st.session_state[editor_key] = edit_path.read_text(encoding="utf-8")
                             st.toast("파일을 다시 읽었습니다.")
+
+                    # scenario.yaml에 knowledges 섹션이 있을 때 Knowledge 조회 UI
+                    is_yaml = edit_path.suffix in (".yaml", ".yml")
+                    editor_content = st.session_state.get(editor_key, "")
+                    if is_yaml and edit_path.name == "scenario.yaml" and "knowledges:" in editor_content:
+                        with st.container(border=True):
+                            st.markdown("**Knowledge 조회**")
+                            kb_url_key = f"kb_url_scenario__{selected_file}"
+                            know_page_key = f"know_browser_page__{selected_file}"
+                            know_data_key = f"know_browser_data__{selected_file}"
+
+                            if know_page_key not in st.session_state:
+                                st.session_state[know_page_key] = 1
+
+                            kv_col1, kv_col2 = st.columns([4, 1])
+                            with kv_col1:
+                                kb_url_val = st.text_input(
+                                    "Knowledge Base URL",
+                                    value=st.session_state.get(kb_url_key, st.session_state.get("base_url", "")),
+                                    key=kb_url_key,
+                                    placeholder="https://...",
+                                    label_visibility="collapsed",
+                                )
+                            with kv_col2:
+                                fetch_clicked = st.button("🔍 조회", use_container_width=True, key=f"know_fetch__{selected_file}")
+
+                            if fetch_clicked:
+                                if not st.session_state.get("admin_token"):
+                                    st.warning("로그인이 필요합니다. 사이드바에서 로그인 후 다시 시도하세요.")
+                                else:
+                                    st.session_state[know_page_key] = 1
+                                    try:
+                                        page = 1
+                                        resp = httpx.get(
+                                            f"{kb_url_val.rstrip('/')}/api/v1/knowledge/repos/unified",
+                                            params={"page": page, "size": 5, "filter": "is_deleted:false,is_active:true"},
+                                            headers={"Authorization": f"Bearer {st.session_state.get('admin_token')}"},
+                                            verify=SSL_VERIFY,
+                                            timeout=30.0,
+                                        )
+                                        resp.raise_for_status()
+                                        st.session_state[know_data_key] = resp.json()
+                                    except Exception as exc:
+                                        st.error(f"조회 실패: {exc}")
+                                        st.session_state[know_data_key] = None
+
+                            know_data = st.session_state.get(know_data_key)
+                            if know_data is not None:
+                                # items 추출
+                                raw = know_data.get("data", []) if isinstance(know_data, dict) else []
+                                if isinstance(raw, list):
+                                    items = raw
+                                elif isinstance(raw, dict):
+                                    items = raw.get("data", [])
+                                else:
+                                    items = []
+
+                                # pagination: payload.pagination.links 기반
+                                links = (know_data.get("payload", {}).get("pagination", {}).get("links", [])
+                                         if isinstance(know_data, dict) else [])
+                                has_prev = len(links) > 0 and links[0].get("url") is not None
+                                has_next = len(links) > 1 and links[1].get("url") is not None
+                                prev_page = links[0].get("page") if has_prev else None
+                                next_page = links[1].get("page") if has_next else None
+                                page_size = 5
+                                current_page = st.session_state[know_page_key]
+                                last_page = (know_data.get("payload", {}).get("pagination", {}).get("last_page", -1)
+                                             if isinstance(know_data, dict) else -1)
+                                page_label = f"{current_page} / {last_page}" if last_page and last_page > 0 else str(current_page)
+
+                                if items:
+                                    display_cols = ["id", "name", "vector_db_type", "kind"]
+                                    rows = [{c: row.get(c, "") for c in display_cols} for row in items]
+                                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                                else:
+                                    st.info("결과 없음")
+
+                                _, pg_col1, pg_col2, pg_col3, _ = st.columns([3, 1, 2, 1, 3])
+                                with pg_col1:
+                                    if st.button("<", key=f"know_prev__{selected_file}", disabled=not has_prev, use_container_width=True):
+                                        if not st.session_state.get("admin_token"):
+                                            st.warning("로그인이 필요합니다. 사이드바에서 로그인 후 다시 시도하세요.")
+                                        else:
+                                            new_page = max(1, prev_page if prev_page else current_page - 1)
+                                            st.session_state[know_page_key] = new_page
+                                            try:
+                                                resp = httpx.get(
+                                                    f"{kb_url_val.rstrip('/')}/api/v1/knowledge/repos/unified",
+                                                    params={"page": new_page, "size": page_size, "filter": "is_deleted:false,is_active:true"},
+                                                    headers={"Authorization": f"Bearer {st.session_state.get('admin_token')}"},
+                                                    verify=SSL_VERIFY,
+                                                    timeout=30.0,
+                                                )
+                                                resp.raise_for_status()
+                                                st.session_state[know_data_key] = resp.json()
+                                            except Exception as exc:
+                                                st.error(f"조회 실패: {exc}")
+                                            st.rerun()
+                                with pg_col2:
+                                    st.markdown(f"<div style='text-align:center; padding-top:8px'>{page_label}</div>", unsafe_allow_html=True)
+                                with pg_col3:
+                                    if st.button(">", key=f"know_next__{selected_file}", disabled=not has_next, use_container_width=True):
+                                        if not st.session_state.get("admin_token"):
+                                            st.warning("로그인이 필요합니다. 사이드바에서 로그인 후 다시 시도하세요.")
+                                        else:
+                                            new_page = next_page if next_page else current_page + 1
+                                            st.session_state[know_page_key] = new_page
+                                            try:
+                                                resp = httpx.get(
+                                                    f"{kb_url_val.rstrip('/')}/api/v1/knowledge/repos/unified",
+                                                    params={"page": new_page, "size": page_size, "filter": "is_deleted:false,is_active:true"},
+                                                    headers={"Authorization": f"Bearer {st.session_state.get('admin_token')}"},
+                                                    verify=SSL_VERIFY,
+                                                    timeout=30.0,
+                                                )
+                                                resp.raise_for_status()
+                                                st.session_state[know_data_key] = resp.json()
+                                            except Exception as exc:
+                                                st.error(f"조회 실패: {exc}")
+                                            st.rerun()
+
+                    # scenario.yaml에 llms 섹션이 있을 때 LLM 조회 UI
+                    if is_yaml and edit_path.name == "scenario.yaml" and "llms:" in editor_content:
+                        with st.container(border=True):
+                            st.markdown("**LLM 조회**")
+                            llm_url_key = f"serving_url_scenario__{selected_file}"
+                            llm_page_key = f"llm_browser_page__{selected_file}"
+                            llm_data_key = f"llm_browser_data__{selected_file}"
+
+                            if llm_page_key not in st.session_state:
+                                st.session_state[llm_page_key] = 1
+
+                            lv_col1, lv_col2 = st.columns([4, 1])
+                            with lv_col1:
+                                llm_url_val = st.text_input(
+                                    "Serving URL",
+                                    value=st.session_state.get(llm_url_key, st.session_state.get("base_url", "")),
+                                    key=llm_url_key,
+                                    placeholder="https://...",
+                                    label_visibility="collapsed",
+                                )
+                            with lv_col2:
+                                llm_fetch_clicked = st.button("🔍 조회", use_container_width=True, key=f"llm_fetch__{selected_file}")
+
+                            if llm_fetch_clicked:
+                                if not st.session_state.get("admin_token"):
+                                    st.warning("로그인이 필요합니다. 사이드바에서 로그인 후 다시 시도하세요.")
+                                else:
+                                    st.session_state[llm_page_key] = 1
+                                    try:
+                                        resp = httpx.get(
+                                            f"{llm_url_val.rstrip('/')}/api/v1/servings",
+                                            params={"page": 1, "size": 5, "filter": "type:language,status:Available"},
+                                            headers={"Authorization": f"Bearer {st.session_state.get('admin_token')}"},
+                                            verify=SSL_VERIFY,
+                                            timeout=30.0,
+                                        )
+                                        resp.raise_for_status()
+                                        st.session_state[llm_data_key] = resp.json()
+                                    except Exception as exc:
+                                        st.error(f"조회 실패: {exc}")
+                                        st.session_state[llm_data_key] = None
+
+                            llm_data = st.session_state.get(llm_data_key)
+                            if llm_data is not None:
+                                # items 추출
+                                llm_raw = llm_data.get("data", []) if isinstance(llm_data, dict) else []
+                                if isinstance(llm_raw, list):
+                                    llm_items = llm_raw
+                                elif isinstance(llm_raw, dict):
+                                    llm_items = llm_raw.get("data", [])
+                                else:
+                                    llm_items = []
+
+                                # pagination: payload.pagination.links 기반
+                                llm_links = (llm_data.get("payload", {}).get("pagination", {}).get("links", [])
+                                             if isinstance(llm_data, dict) else [])
+                                llm_has_prev = len(llm_links) > 0 and llm_links[0].get("url") is not None
+                                llm_has_next = len(llm_links) > 1 and llm_links[1].get("url") is not None
+                                llm_prev_page = llm_links[0].get("page") if llm_has_prev else None
+                                llm_next_page = llm_links[1].get("page") if llm_has_next else None
+                                llm_page_size = 5
+                                llm_current_page = st.session_state[llm_page_key]
+                                llm_last_page = (llm_data.get("payload", {}).get("pagination", {}).get("last_page", -1)
+                                                 if isinstance(llm_data, dict) else -1)
+                                llm_page_label = (f"{llm_current_page} / {llm_last_page}"
+                                                  if llm_last_page and llm_last_page > 0 else str(llm_current_page))
+
+                                if llm_items:
+                                    rows = [{
+                                        "serving_name": row.get("name", ""),
+                                        "model_name": row.get("model_name", ""),
+                                        "provider_name": row.get("provider_name", ""),
+                                        "serving_type": row.get("serving_type", ""),
+                                    } for row in llm_items]
+                                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                                else:
+                                    st.info("결과 없음")
+
+                                _, lp_col1, lp_col2, lp_col3, _ = st.columns([3, 1, 2, 1, 3])
+                                with lp_col1:
+                                    if st.button("<", key=f"llm_prev__{selected_file}", disabled=not llm_has_prev, use_container_width=True):
+                                        if not st.session_state.get("admin_token"):
+                                            st.warning("로그인이 필요합니다. 사이드바에서 로그인 후 다시 시도하세요.")
+                                        else:
+                                            new_page = max(1, llm_prev_page if llm_prev_page else llm_current_page - 1)
+                                            st.session_state[llm_page_key] = new_page
+                                            try:
+                                                resp = httpx.get(
+                                                    f"{llm_url_val.rstrip('/')}/api/v1/servings",
+                                                    params={"page": new_page, "size": llm_page_size, "filter": "type:language,status:Available"},
+                                                    headers={"Authorization": f"Bearer {st.session_state.get('admin_token')}"},
+                                                    verify=SSL_VERIFY,
+                                                    timeout=30.0,
+                                                )
+                                                resp.raise_for_status()
+                                                st.session_state[llm_data_key] = resp.json()
+                                            except Exception as exc:
+                                                st.error(f"조회 실패: {exc}")
+                                            st.rerun()
+                                with lp_col2:
+                                    st.markdown(f"<div style='text-align:center; padding-top:8px'>{llm_page_label}</div>", unsafe_allow_html=True)
+                                with lp_col3:
+                                    if st.button(">", key=f"llm_next__{selected_file}", disabled=not llm_has_next, use_container_width=True):
+                                        if not st.session_state.get("admin_token"):
+                                            st.warning("로그인이 필요합니다. 사이드바에서 로그인 후 다시 시도하세요.")
+                                        else:
+                                            new_page = llm_next_page if llm_next_page else llm_current_page + 1
+                                            st.session_state[llm_page_key] = new_page
+                                            try:
+                                                resp = httpx.get(
+                                                    f"{llm_url_val.rstrip('/')}/api/v1/servings",
+                                                    params={"page": new_page, "size": llm_page_size, "filter": "type:language,status:Available"},
+                                                    headers={"Authorization": f"Bearer {st.session_state.get('admin_token')}"},
+                                                    verify=SSL_VERIFY,
+                                                    timeout=30.0,
+                                                )
+                                                resp.raise_for_status()
+                                                st.session_state[llm_data_key] = resp.json()
+                                            except Exception as exc:
+                                                st.error(f"조회 실패: {exc}")
+                                            st.rerun()
 
                     edited = st.text_area(
                         f"`{edit_path}`",

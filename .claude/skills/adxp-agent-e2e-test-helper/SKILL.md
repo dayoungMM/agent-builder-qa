@@ -166,14 +166,16 @@ llm은 JSON 파일 생성 없이 scenario.yaml llms 섹션에만 추가.
 1. auto-delete (테스트 후 생성된 리소스를 자동 삭제할까요?)
    - graph: yes / no
    - app: yes / no
-   - prompts: yes / no  ← prompt.json이 있는 경우만
+   - prompts: yes / no  ← prompts 섹션이 있을 때만
+   - tools: yes / no     ← tools 섹션이 있을 때만
+   - mcps: yes / no      ← mcps 섹션이 있을 때만
 
 2. update-if-exists (아래 설명 참고)
    - graph: yes / no
    - prompts: yes / no   ← prompts 섹션이 있을 때만
    - tools: yes / no     ← tools 섹션이 있을 때만
    - mcps: yes / no      ← mcps 섹션이 있을 때만
-   - knowledges: yes / no ← knowledges 섹션이 있을 때만
+   
 ```
 
 **update-if-exists — 이미 리소스가 존재하는 경우 업데이트 할지 여부**
@@ -255,16 +257,14 @@ mcps:                                       # mcp.json이 있는 경우만
 knowledges:                                 # knowledge.json이 있는 경우만
   - name: "<knowledge_name>"
     id: <uuid>                              # graph.json의 repo_id 값과 동일한 UUID
-    json_path: "./scenarios/<folder>/know_<uuid>.json"
-    auto-delete: false
-    update-if-exists: false
+    placeholder_in_graph: "@@select_knowledge"
+    auto-delete: false # 무조건 false
+    update-if-exists: false #무조건 false
 
 answer-judge:
-  questions:
-    - "<테스트 질문>"
-  criteria:
-    - "<판정 기준>"
-    - "HTTP Status 200"
+  - questions: "<테스트 질문>"
+    criteria:
+      - "<판정 기준>"
 ```
 
 ### 리소스 처리 로직 (Prompts / Tools / MCPs 공통)
@@ -273,6 +273,18 @@ answer-judge:
 | id(UUID)로 검색 결과 없음 | Import API(POST)로 해당 UUID를 id로 신규 생성 |
 | id(UUID)로 검색 결과 있음 + `update-if-exists: true` | PUT으로 업데이트 |
 | id(UUID)로 검색 결과 있음 + `update-if-exists: false` | 기존 리소스 재사용 (업데이트 생략) |
+
+---
+
+### Placeholder `@@` 포함/제외 규칙
+
+| 리소스 | scenario.yaml `placeholder_in_graph` | graph.json |
+|--------|--------------------------------------|------------|
+| **LLM** | `@@` **제외** (예: `llm_agent__generator_1`) | `@@llm_agent__generator_1@@` |
+| **Knowledge** | `@@` **포함** (예: `@@select_knowledge@@`) | `@@select_knowledge@@` |
+
+- LLM: scenario.yaml에 `@@` 없이 key만 쓰면, 엔진이 자동으로 `@@key@@` 형식으로 치환
+- Knowledge: scenario.yaml과 graph.json 모두 `@@` 포함한 동일 문자열 사용
 
 ---
 

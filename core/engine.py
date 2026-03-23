@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import time
@@ -11,6 +12,8 @@ from typing import Callable, Iterable, List, Optional
 
 import httpx
 import yaml
+
+SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() != "false"
 
 from core.judge import LLMJudge
 from core.models import (
@@ -174,9 +177,9 @@ def print_results(results: Iterable[ScenarioResult], stream=None) -> None:
 #            PUT    /api/v1/mcp/catalogs/{id}
 #            DELETE /api/v1/mcp/catalogs/{id}
 #   Know   : POST   /api/v1/rag/repos
-#            POST   /api/v1/rag/repos/import?repo_id={id}
-#            PUT    /api/v1/rag/repos/{id}
-#            DELETE /api/v1/rag/repos/{id}
+#            POST   /api/v1/knowledge/repos/external/import  (id in body)
+#            PUT    /api/v1/knowledge/repos/external/{id}    (multipart/form-data)
+#            DELETE /api/v1/knowledge/repos/external/{id}
 # ──────────────────────────────────────────────────────────────────────────────
 
 _HTTP_STATUS_PATTERN = re.compile(r'^\s*HTTP\s+Status\s+(\d+)\s*$', re.IGNORECASE)
@@ -197,6 +200,7 @@ class ScenarioEngine:
         self.client = httpx.Client(
             headers={"Authorization": f"Bearer {admin_token}"},
             timeout=120.0,
+            verify=SSL_VERIFY,
         )
 
     def _notify(self, message: str, level: str = "info"):
@@ -331,6 +335,14 @@ class ScenarioEngine:
         """@@placeholder@@ 형식의 LLM 플레이스홀더를 실제 serving_name으로 치환합니다."""
         for llm_cfg in llm_configs:
             content = content.replace(f"@@{llm_cfg.placeholder_in_graph}@@", llm_cfg.replace_to)
+        return content
+
+    @staticmethod
+    def _substitute_knowledge_placeholders(content: str, knowledge_configs: list[KnowledgeConfig]) -> str:
+        """placeholder_in_graph 문자열을 knowledge ID로 치환합니다."""
+        for know_cfg in knowledge_configs:
+            if know_cfg.placeholder_in_graph:
+                content = content.replace(know_cfg.placeholder_in_graph, know_cfg.id)
         return content
 
     @staticmethod
@@ -469,6 +481,7 @@ class ScenarioEngine:
         payload: dict,
         update_if_exists: bool,
         put_url: str,
+        put_kwargs: Optional[dict] = None,
     ) -> str:
         """Import API 공통 로직.
         - Created / Validated → resource_id 반환
@@ -479,12 +492,8 @@ class ScenarioEngine:
             try:
                 data = response.json()
                 if isinstance(data, dict):
-                    return (
-                        data.get("detail")
-                        or data.get("message")
-                        or data.get("error")
-                        or str(data)
-                    )
+                    return data.get("message") or data.get("detail") or data.get("error") or str(data)
+                return str(data)
             except Exception:
                 pass
             # Fallback to raw text (may be empty).
@@ -492,14 +501,16 @@ class ScenarioEngine:
             return text if text else response.reason_phrase or ""
 
         try:
-            resp = self.client.post(import_url, params={id_param: resource_id}, json=payload)
+            params = {id_param: resource_id} if id_param else {}
+            resp = self.client.post(import_url, params=params, json=payload)
             resp.raise_for_status()
             detail = resp.json().get("detail", "")
             self._notify(f"  → Import {detail}: {resource_id}")
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 405 and update_if_exists:
                 self._notify(f"  → 충돌, PUT 업데이트: {resource_id}", "warning")
-                put_resp = self.client.put(put_url, json=payload)
+                kw = put_kwargs if put_kwargs is not None else {"json": payload}
+                put_resp = self.client.put(put_url, **kw)
                 try:
                     put_resp.raise_for_status()
                 except httpx.HTTPStatusError as put_e:
@@ -795,51 +806,15 @@ class ScenarioEngine:
     def run_knowledge_stage(
         self, know_cfg: KnowledgeConfig, scenario_dir: str
     ) -> tuple[str, StepResult]:
-        step_name = f"Knowledge: {know_cfg.name}"
+        step_name = f"Knowledge: {know_cfg.id}"
         start = time.time()
-
-        try:
-            self._notify(f"[Knowledge] '{know_cfg.name}' 처리 중...")
-
-            file_path = self._resolve_path(know_cfg.json_path, scenario_dir)
-            with open(file_path, "r", encoding="utf-8") as f:
-                payload = json.load(f)
-            payload["name"] = know_cfg.name
-
-            if know_cfg.id:
-                know_id = self._import_resource(
-                    import_url=f"{self.base_url}/api/v1/rag/repos/import",
-                    id_param="repo_id",
-                    resource_id=know_cfg.id,
-                    payload=payload,
-                    update_if_exists=know_cfg.update_if_exists,
-                    put_url=f"{self.base_url}/api/v1/rag/repos/{know_cfg.id}",
-                )
-            else:
-                resp = self.client.post(
-                    f"{self.base_url}/api/v1/rag/repos", json=payload
-                )
-                resp.raise_for_status()
-                know_id = resp.json()["id"]
-                self._notify(f"[Knowledge] 생성 완료: {know_id}")
-
-            return know_id, StepResult(
-                step=step_name,
-                status=StepStatus.PASS,
-                request=payload,
-                response=f"knowledge_id={know_id}",
-                elapsed_time=time.time() - start,
-            )
-
-        except Exception as e:
-            traceback.print_exc()
-            self._notify(f"[Knowledge] 오류: {e}", "error")
-            return "", StepResult(
-                step=step_name,
-                status=StepStatus.ERROR,
-                error=str(e),
-                elapsed_time=time.time() - start,
-            )
+        self._notify(f"[Knowledge] '{know_cfg.id}' 사용 중...")
+        return know_cfg.id, StepResult(
+            step=step_name,
+            status=StepStatus.PASS,
+            response=f"Using existing knowledge repo: {know_cfg.id}",
+            elapsed_time=time.time() - start,
+        )
 
     # ── Graph Stage ───────────────────────────────
 
@@ -850,6 +825,7 @@ class ScenarioEngine:
         prompt_vars: dict[str, str],
         llm_configs: list[LLMConfig],
         answer_judge: list[AnswerJudgeItem],
+        knowledge_configs: list[KnowledgeConfig] | None = None,
     ) -> tuple[str, list[StepResult]]:
         results: list[StepResult] = []
         graph_id = ""
@@ -866,7 +842,11 @@ class ScenarioEngine:
             # 1. LLM placeholder 치환: @@key@@ → replace_to
             graph_content = self._substitute_llm_placeholders(graph_content, llm_configs)
 
-            # 2. Prompt 변수 치환: {var} → prompt_id
+            # 2. Knowledge placeholder 치환: placeholder_in_graph → knowledge id
+            if knowledge_configs:
+                graph_content = self._substitute_knowledge_placeholders(graph_content, knowledge_configs)
+
+            # 3. Prompt 변수 치환: {var} → prompt_id
             graph_content = self._substitute_variables(graph_content, prompt_vars)
 
             payload = json.loads(graph_content)
@@ -1197,7 +1177,7 @@ class ScenarioEngine:
             if know_cfg.auto_delete and know_id:
                 _delete(
                     f"Knowledge ({know_id})",
-                    f"{self.base_url}/api/v1/rag/repos/{know_id}",
+                    f"{self.base_url}/api/v1/knowledge/repos/external/{know_id}",
                 )
 
         return results
@@ -1263,6 +1243,7 @@ class ScenarioEngine:
                 prompt_vars=prompt_vars,
                 llm_configs=scenario.llms,
                 answer_judge=scenario.answer_judge,
+                knowledge_configs=scenario.knowledges or None,
             )
             result.steps.extend(graph_steps)
             if graph_steps and graph_steps[0].status == StepStatus.ERROR:
