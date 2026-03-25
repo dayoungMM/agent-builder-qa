@@ -63,10 +63,19 @@ pip install -r requirements.txt
 
 ```bash
 cd /path/to/agent-builder-qa
-streamlit run app_streamlit/main.py
+streamlit run app_streamlit/main.py --server.baseUrlPath=/agentic-qa
 ```
 
+실행 후 `http://localhost:8501/agentic-qa` 로 접속합니다.
+
 Sidebar에서 API Key, Base URL, Admin Token을 설정하고 시나리오를 선택해 실행합니다.
+
+> **접속 URL 정리**
+> | 환경 | URL |
+> |---|---|
+> | 로컬 (`streamlit run`) | `http://localhost:8501/agentic-qa` |
+> | 로컬 (`docker run`) | `http://localhost:8501/agentic-qa` |
+> | K8s (운영) | `https://aip.sktai.io/agentic-qa` |
 
 ---
 

@@ -74,10 +74,8 @@ function doCopy(btn){{
     st_components.html(html, height=height, scrolling=False)
 
 
-_DEFAULT_ADXP_ENDPOINT = (
-    "http://agent-gateway.aiplatform.svc.cluster.local/api/v1/gateway/chat/completion"
-)
-_DEFAULT_BASE_URL = "http://agent-backend.aiplatform.svc.cluster.local"
+_DEFAULT_ADXP_ENDPOINT = "https://aip.sktai.io/api/v1/gateway/chat/completions"
+_DEFAULT_BASE_URL = "https://aip.sktai.io"
 
 from core.engine import ScenarioEngine, discover_scenario_files
 from core.judge import LLMJudge
@@ -172,7 +170,7 @@ _DEFAULTS: dict = {
     "llm_temperature": 0.0,
     "llm_endpoint": os.getenv("ADXP_JUDGE_ENDPOINT", _DEFAULT_ADXP_ENDPOINT),
     "base_url": os.getenv("BASE_URL", _DEFAULT_BASE_URL),
-    "auth_url": os.getenv("AUTH_URL", ""),
+    "auth_url": os.getenv("AUTH_URL", "https://aip.sktai.io"),
     "auth_username": os.getenv("AUTH_USERNAME", ""),
     "auth_password": os.getenv("AUTH_PASSWORD", ""),
     "auth_client_id": os.getenv("AUTH_CLIENT_ID", "default"),

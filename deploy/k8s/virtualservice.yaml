@@ -1,0 +1,25 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: aiplatform
+  namespace: aiplatform
+  labels:
+    k8slens-edit-resource-version: v1beta1
+spec:
+# 중략...
+  http:
+  - match:
+    - uri:
+        exact: /agentic-qa
+    redirect:
+      uri: /agentic-qa/
+      scheme: https
+  - match:
+    - uri:
+        prefix: /agentic-qa/
+    route:
+    - destination:
+        host: agentic-qa-service.aiplatform.svc.cluster.local
+        port:
+          number: 80
+
