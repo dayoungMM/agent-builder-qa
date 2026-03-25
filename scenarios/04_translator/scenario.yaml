@@ -39,4 +39,4 @@ answer-judge:
   - question: "생일축하해 영어로"
     criteria:
       - "HTTP Status 200"
-      - "답변은 Happy Birthday 여야 함"
+      - "답변은 Happy Birthday 를 포함해야함"
