@@ -10,6 +10,9 @@ from pathlib import Path
 import httpx
 import pandas as pd
 import streamlit as st
+import queue
+import threading
+
 import streamlit.components.v1 as st_components
 
 SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() != "false"
@@ -80,6 +83,74 @@ from core.engine import ScenarioEngine, discover_scenario_files
 from core.judge import LLMJudge
 from core.models import ScenarioResult, StepStatus
 
+
+def _run_scenarios_thread(
+    targets: list[str],
+    scenario_labels: dict[str, str],
+    base_url: str,
+    admin_token: str,
+    judge_provider: str,
+    judge_api_key: str,
+    judge_model: str,
+    judge_temperature: float,
+    judge_endpoint: str,
+    stop_event: threading.Event,
+    result_queue: queue.Queue,
+) -> None:
+    """백그라운드에서 시나리오를 순차 실행하고 결과를 큐로 전달합니다."""
+    judge = LLMJudge(
+        provider=judge_provider,
+        api_key=judge_api_key,
+        model=judge_model,
+        temperature=judge_temperature,
+        endpoint=judge_endpoint,
+    )
+    results: list[ScenarioResult] = []
+
+    for yaml_path in targets:
+        if stop_event.is_set():
+            result_queue.put({"type": "all_done", "results": results, "stopped": True})
+            return
+
+        scenario_name = scenario_labels.get(yaml_path, yaml_path)
+        result_queue.put({"type": "scenario_start", "name": scenario_name})
+
+        def on_update(msg: str, level: str = "info", _n=scenario_name, _rq=result_queue, _se=stop_event):
+            _rq.put({"type": "log", "scenario": _n, "msg": msg, "level": level})
+            if _se.is_set():
+                raise InterruptedError("사용자가 실행을 중단했습니다.")
+
+        engine = ScenarioEngine(
+            base_url=base_url,
+            admin_token=admin_token,
+            judge=judge,
+            on_step_update=on_update,
+        )
+
+        try:
+            result = engine.run_scenario(yaml_path)
+            results.append(result)
+            result_queue.put({
+                "type": "scenario_done",
+                "name": scenario_name,
+                "result": result,
+                "status": result.final_status.value,
+            })
+        except InterruptedError:
+            result_queue.put({"type": "scenario_stopped", "name": scenario_name})
+            result_queue.put({"type": "all_done", "results": results, "stopped": True})
+            return
+        except Exception as exc:
+            result_queue.put({
+                "type": "scenario_error",
+                "name": scenario_name,
+                "error": str(exc),
+                "tb": traceback.format_exc(),
+            })
+
+    result_queue.put({"type": "all_done", "results": results, "stopped": False})
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Page Config
 # ──────────────────────────────────────────────────────────────────────────────
@@ -114,6 +185,10 @@ _DEFAULTS: dict = {
     "running": False,
     "stop_requested": False,
     "results": [],
+    "_stop_event": None,
+    "_result_queue": None,
+    "_thread": None,
+    "_scenario_progress": {},
 }
 
 for _k, _v in _DEFAULTS.items():
@@ -405,8 +480,10 @@ with tab_runner:
 
     if stop_btn:
         st.session_state.stop_requested = True
+        if st.session_state._stop_event:
+            st.session_state._stop_event.set()
 
-    # ── Execution ─────────────────────────────────
+    # ── Execution: 백그라운드 스레드 시작 ────────────
 
     targets: list[str] = []
     if run_selected_btn:
@@ -424,53 +501,115 @@ with tab_runner:
             if not _token_ok:
                 st.error(_token_err)
             else:
+                _stop_event = threading.Event()
+                _result_queue: queue.Queue = queue.Queue()
+                st.session_state._stop_event = _stop_event
+                st.session_state._result_queue = _result_queue
+                st.session_state._scenario_progress = {}
                 st.session_state.running = True
                 st.session_state.stop_requested = False
                 st.session_state.results = []
 
-                st.subheader("진행 상황")
+                _thread = threading.Thread(
+                    target=_run_scenarios_thread,
+                    args=(
+                        targets,
+                        scenario_labels,
+                        st.session_state.base_url,
+                        st.session_state.admin_token,
+                        st.session_state.llm_provider,
+                        st.session_state.llm_api_key,
+                        st.session_state.llm_model,
+                        float(st.session_state.llm_temperature),
+                        st.session_state.llm_endpoint,
+                        _stop_event,
+                        _result_queue,
+                    ),
+                    daemon=True,
+                )
+                st.session_state._thread = _thread
+                _thread.start()
+                st.rerun()
 
-                results: list[ScenarioResult] = []
+    # ── 실행 중: 큐 polling + 진행 상황 표시 ─────────
 
-                for yaml_path in targets:
-                    if st.session_state.stop_requested:
-                        st.warning("⏹ 실행이 중단되었습니다.")
-                        break
+    if st.session_state.running:
+        _rq = st.session_state._result_queue
+        if _rq:
+            try:
+                while True:
+                    _upd = _rq.get_nowait()
+                    _t = _upd["type"]
+                    if _t == "scenario_start":
+                        st.session_state._scenario_progress[_upd["name"]] = {
+                            "status": "running", "logs": []
+                        }
+                    elif _t == "log":
+                        _prog = st.session_state._scenario_progress.setdefault(
+                            _upd["scenario"], {"status": "running", "logs": []}
+                        )
+                        _prog["logs"].append((_upd["msg"], _upd["level"]))
+                    elif _t == "scenario_done":
+                        _prog = st.session_state._scenario_progress.setdefault(
+                            _upd["name"], {"logs": []}
+                        )
+                        _prog["status"] = "done"
+                        _prog["result"] = _upd["result"]
+                    elif _t == "scenario_stopped":
+                        _prog = st.session_state._scenario_progress.setdefault(
+                            _upd.get("name", ""), {"logs": []}
+                        )
+                        _prog["status"] = "stopped"
+                    elif _t == "scenario_error":
+                        _prog = st.session_state._scenario_progress.setdefault(
+                            _upd.get("name", ""), {"logs": []}
+                        )
+                        _prog["status"] = "error"
+                        _prog["error"] = _upd.get("error", "")
+                    elif _t == "all_done":
+                        st.session_state.results = _upd.get("results", [])
+                        st.session_state.running = False
+            except queue.Empty:
+                pass
 
-                    scenario_name = scenario_labels.get(yaml_path, yaml_path)
-                    log_lines: list[str] = []
+        if st.session_state.running:
+            st.subheader("진행 상황")
+            for _name, _prog in st.session_state._scenario_progress.items():
+                _status = _prog.get("status", "running")
+                _logs = _prog.get("logs", [])
+                _parts = []
+                for _msg, _lvl in _logs[-15:]:
+                    if _lvl == "error":
+                        _parts.append(f":red[❌ {_msg}]")
+                    elif _lvl == "warning":
+                        _parts.append(f":orange[⚠️ {_msg}]")
+                    else:
+                        _parts.append(f"`{_msg}`")
 
-                    with st.status(f"🔄 {scenario_name} 실행 중...", expanded=True) as status_box:
-                        log_area = st.empty()
+                if _status == "running":
+                    with st.status(f"🔄 {_name} 실행 중...", expanded=True):
+                        if _parts:
+                            st.markdown("\n\n".join(_parts))
+                elif _status == "done":
+                    _result = _prog.get("result")
+                    _is_pass = _result and _result.final_status == StepStatus.PASS
+                    with st.status(
+                        f"{'✅' if _is_pass else '❌'} {_name}",
+                        state="complete" if _is_pass else "error",
+                        expanded=not _is_pass,
+                    ):
+                        if _parts:
+                            st.markdown("\n\n".join(_parts))
+                elif _status == "stopped":
+                    st.warning(f"⏹ {_name} — 중단됨")
+                elif _status == "error":
+                    with st.status(f"❌ {_name}", state="error", expanded=True):
+                        if _parts:
+                            st.markdown("\n\n".join(_parts))
+                        st.error(_prog.get("error", "알 수 없는 오류"))
 
-                        def on_update(msg: str, level: str = "info", _log=log_lines, _area=log_area):
-                            _log.append(msg)
-                            _area.markdown(
-                                "\n\n".join(f"`{line}`" for line in _log[-15:])
-                            )
-                            if st.session_state.stop_requested:
-                                raise InterruptedError("사용자가 실행을 중단했습니다.")
-
-                        try:
-                            engine = build_engine(on_update)
-                            result = engine.run_scenario(yaml_path)
-                            results.append(result)
-
-                            if result.final_status == StepStatus.PASS:
-                                status_box.update(label=f"✅ {scenario_name}", state="complete", expanded=False)
-                            else:
-                                status_box.update(label=f"❌ {scenario_name}", state="error", expanded=True)
-
-                        except InterruptedError:
-                            status_box.update(label=f"⏹ {scenario_name} — 중단됨", state="error", expanded=False)
-                            break
-                        except Exception as e:
-                            traceback.print_exc()
-                            st.error(f"실행 오류: {e}")
-                            status_box.update(label=f"❌ {scenario_name} — 오류", state="error", expanded=True)
-
-                st.session_state.results = results
-                st.session_state.running = False
+            time.sleep(0.5)
+            st.rerun()
 
     # ── Result Report ──────────────────────────────
 
