@@ -1,0 +1,32 @@
+{
+  "name": "foreign-language-to-korean",
+  "desc": null,
+  "release": true,
+  "messages": [
+    {
+      "message": "Translate Given sentence into Korean. \nWhen translating, please refer to the context section for any information that might be helpful if context exist.\nThe answer should contain only the result of the translation.",
+      "mtype": 1
+    },
+    {
+      "message": "Given Sentence: {{query}}\nContext: {{context}}\nLet's Translate Given Sentence into Korean",
+      "mtype": 2
+    }
+  ],
+  "tags": [],
+  "variables": [
+    {
+      "variable": "query",
+      "token_limit": 0,
+      "token_limit_flag": false,
+      "validation": "",
+      "validation_flag": false
+    },
+    {
+      "variable": "context",
+      "token_limit": 0,
+      "token_limit_flag": false,
+      "validation": "",
+      "validation_flag": false
+    }
+  ]
+}

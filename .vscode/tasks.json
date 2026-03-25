@@ -2,6 +2,35 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Docker: Build",
+      "type": "shell",
+      "command": "docker build -f deploy/docker/Dockerfile -t aip-harbor.sktai.io/sktai/agent/builder-qa:latest .",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker: Push",
+      "type": "shell",
+      "command": "docker push aip-harbor.sktai.io/sktai/agent/builder-qa:latest",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": [],
+      "dependsOn": "Docker: Build"
+    },
+    {
       "label": "Install requirements",
       "type": "shell",
       "command": "${command:python.interpreterPath}",

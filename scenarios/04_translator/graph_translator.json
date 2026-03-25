@@ -1,0 +1,448 @@
+{
+    "id": "d028a60d-f941-49e4-8416-0ff92bbc50b9",
+    "name": "[QA] Translator",
+    "description": "한-영, 영-한 번역기 예제 (Categorizer 사용)",
+    "graph": {
+        "nodes": [
+            {
+                "id": "d68423ff",
+                "data": {
+                    "id": "d68423ff",
+                    "name": "input__basic_1",
+                    "type": "input__basic",
+                    "input_keys": [
+                        {
+                            "name": "query",
+                            "required": true,
+                            "description": "사용자의 질의",
+                            "fixed_value": null,
+                            "keytable_id": "query_d68423ff",
+                            "object_type": "string"
+                        },
+                        {
+                            "name": "new_string1",
+                            "required": false,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "new_string1__d68423ff",
+                            "object_type": "string"
+                        }
+                    ],
+                    "description": "사용자 질의 입력받았습니다... 🚀",
+                    "innerData": {
+                        "isRun": false,
+                        "isDone": false,
+                        "isError": false,
+                        "isToggle": false,
+                        "logData": []
+                    }
+                },
+                "type": "input__basic",
+                "style": {},
+                "dragging": false,
+                "measured": {
+                    "width": 600,
+                    "height": 669
+                },
+                "position": {
+                    "x": -1155,
+                    "y": 15
+                },
+                "selected": false,
+                "source_position": "left",
+                "target_position": "right"
+            },
+            {
+                "id": "96b13362",
+                "data": {
+                    "id": "96b13362",
+                    "name": "agent__categorizer_1",
+                    "type": "agent__categorizer",
+                    "prompt_id": "",
+                    "categories": [
+                        {
+                            "id": "any_to_kor",
+                            "category": "any_to_kor",
+                            "description": "질문이 한국어가 아닌 경우에 사용. 문장을 한국어로 번역"
+                        },
+                        {
+                            "id": "kor_to_any",
+                            "category": "kor_to_any",
+                            "description": "질문이 한국어인 경우 사용. 한국어 문장을 다른 언어로 번역"
+                        }
+                    ],
+                    "input_keys": [
+                        {
+                            "name": "query",
+                            "required": true,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "query_d68423ff",
+                            "object_type": "string"
+                        },
+                        {
+                            "name": "context",
+                            "required": false,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": null,
+                            "object_type": "string"
+                        }
+                    ],
+                    "description": "질문 의도를 분석중입니다...🤖",
+                    "output_keys": [
+                        {
+                            "name": "selected",
+                            "keytable_id": "selected_96b13362"
+                        }
+                    ],
+                    "serving_name": "@@llm_agent__categorizer_1@@",
+                    "serving_model": "@@llm_agent__categorizer_1@@",
+                    "innerData": {
+                        "isRun": false,
+                        "isDone": false,
+                        "isError": false,
+                        "isToggle": false
+                    }
+                },
+                "type": "agent__categorizer",
+                "style": {},
+                "measured": {
+                    "width": 600,
+                    "height": 884
+                },
+                "position": {
+                    "x": -465,
+                    "y": -150
+                },
+                "selected": false,
+                "source_position": "left",
+                "target_position": "right"
+            },
+            {
+                "id": "0ad58992",
+                "data": {
+                    "id": "0ad58992",
+                    "name": "foreign-language-to-korean",
+                    "type": "agent__generator",
+                    "tools": [],
+                    "tool_ids": [],
+                    "prompt_id": "d4a249f5-5249-4852-bb3d-ea6ca10945d3",
+                    "fewshot_id": "",
+                    "input_keys": [
+                        {
+                            "name": "query",
+                            "required": true,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "query_d68423ff",
+                            "object_type": "string"
+                        },
+                        {
+                            "name": "context",
+                            "required": false,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "",
+                            "object_type": "string"
+                        }
+                    ],
+                    "description": "한국어로 번역중입니다...🤖",
+                    "output_keys": [
+                        {
+                            "name": "content",
+                            "keytable_id": "content_0ad58992"
+                        }
+                    ],
+                    "mcp_catalogs": [],
+                    "serving_name": "@@llm_foreign-language-to-korean@@",
+                    "serving_model": "@@llm_foreign-language-to-korean@@",
+                    "model_parameters": null,
+                    "innerData": {
+                        "isRun": false,
+                        "isDone": false,
+                        "isError": false,
+                        "isToggle": false
+                    }
+                },
+                "type": "agent__generator",
+                "style": {},
+                "dragging": false,
+                "measured": {
+                    "width": 600,
+                    "height": 822
+                },
+                "position": {
+                    "x": 330,
+                    "y": -480
+                },
+                "selected": false,
+                "source_position": "left",
+                "target_position": "right"
+            },
+            {
+                "id": "c0ef2be0",
+                "data": {
+                    "id": "c0ef2be0",
+                    "name": "korean-to-foreign-language",
+                    "type": "agent__generator",
+                    "tools": [],
+                    "tool_ids": [],
+                    "prompt_id": "7611bab1-ef31-4c88-8767-82b4bace0afb",
+                    "fewshot_id": "",
+                    "input_keys": [
+                        {
+                            "name": "query",
+                            "required": true,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "query_d68423ff",
+                            "object_type": "string"
+                        },
+                        {
+                            "name": "context",
+                            "required": false,
+                            "description": "",
+                            "fixed_value": null,
+                            "keytable_id": "",
+                            "object_type": "string"
+                        }
+                    ],
+                    "description": "한국어 문장을 다른 언어로 번역중입니다...🤖",
+                    "output_keys": [
+                        {
+                            "name": "content",
+                            "keytable_id": "content_c0ef2be0"
+                        }
+                    ],
+                    "mcp_catalogs": [],
+                    "serving_name": "@@llm_korean-to-foreign-language@@",
+                    "serving_model": "@@llm_korean-to-foreign-language@@",
+                    "model_parameters": null,
+                    "innerData": {
+                        "isRun": false,
+                        "isDone": false,
+                        "isError": false,
+                        "isToggle": false
+                    }
+                },
+                "type": "agent__generator",
+                "style": {},
+                "measured": {
+                    "width": 600,
+                    "height": 822
+                },
+                "position": {
+                    "x": 330,
+                    "y": 585
+                },
+                "selected": false,
+                "source_position": "left",
+                "target_position": "right"
+            },
+            {
+                "id": "d2de4a22",
+                "data": {
+                    "id": "d2de4a22",
+                    "name": "output__relay_1",
+                    "type": "output__relay",
+                    "description": "응답 출력중입니다... 💬",
+                    "innerData": {
+                        "isRun": false,
+                        "isDone": false,
+                        "isError": false,
+                        "isToggle": false
+                    }
+                },
+                "type": "output__relay",
+                "style": {},
+                "measured": {
+                    "width": 600,
+                    "height": 343
+                },
+                "position": {
+                    "x": 1425,
+                    "y": 285
+                },
+                "source_position": "left",
+                "target_position": "right"
+            }
+        ],
+        "edges": [
+            {
+                "id": "383ccddb",
+                "data": {
+                    "send_to": "0ad58992",
+                    "category": {
+                        "id": "",
+                        "category": "any_to_kor",
+                        "description": "질문이 한국어가 아닌 경우에 사용. 문장을 한국어로 번역"
+                    },
+                    "edge_type": "case",
+                    "send_from": "96b13362",
+                    "condition_label": "any_to_kor"
+                },
+                "type": "case",
+                "label": "any_to_kor",
+                "style": {
+                    "stroke": "#1B84FF",
+                    "strokeWidth": 2,
+                    "strokeDasharray": "5, 5"
+                },
+                "source": "96b13362",
+                "target": "0ad58992",
+                "markerEnd": {
+                    "type": "arrowclosed",
+                    "width": 10,
+                    "height": 10,
+                    "color": "#1B84FF"
+                },
+                "marker_end": null,
+                "marker_start": null,
+                "sourceHandle": "handle-any_to_kor",
+                "reconnectable": null,
+                "source_handle": "handle-any_to_kor",
+                "target_handle": null,
+                "condition_label": "any_to_kor"
+            },
+            {
+                "id": "2d6edf4a",
+                "data": {
+                    "send_to": "96b13362",
+                    "category": {
+                        "id": "",
+                        "category": "",
+                        "description": ""
+                    },
+                    "edge_type": "none",
+                    "send_from": "d68423ff",
+                    "condition_label": null
+                },
+                "type": "none",
+                "style": {
+                    "stroke": "#C4CADA",
+                    "strokeWidth": 3
+                },
+                "source": "d68423ff",
+                "target": "96b13362",
+                "markerEnd": {
+                    "type": "arrowclosed",
+                    "width": 10,
+                    "height": 10,
+                    "color": "#C4CADA"
+                },
+                "marker_end": null,
+                "marker_start": null,
+                "reconnectable": null,
+                "target_handle": null
+            },
+            {
+                "id": "3cc3aaf6",
+                "data": {
+                    "send_to": "c0ef2be0",
+                    "category": {
+                        "id": "kor_to_any",
+                        "category": "kor_to_any",
+                        "description": "질문이 한국어인 경우 사용. 한국어 문장을 다른 언어로 번역"
+                    },
+                    "edge_type": "case",
+                    "send_from": "96b13362",
+                    "condition_label": "kor_to_any"
+                },
+                "type": "case",
+                "label": "kor_to_any",
+                "style": {
+                    "stroke": "#1B84FF",
+                    "strokeWidth": 2,
+                    "strokeDasharray": "5, 5"
+                },
+                "source": "96b13362",
+                "target": "c0ef2be0",
+                "markerEnd": {
+                    "type": "arrowclosed",
+                    "width": 10,
+                    "height": 10,
+                    "color": "#1B84FF"
+                },
+                "marker_end": null,
+                "marker_start": null,
+                "sourceHandle": "handle-kor_to_any",
+                "targetHandle": "gen_left",
+                "reconnectable": null,
+                "source_handle": "handle-kor_to_any",
+                "target_handle": null,
+                "condition_label": "kor_to_any"
+            },
+            {
+                "id": "13d1e0d3",
+                "data": {
+                    "send_to": "d2de4a22",
+                    "category": {
+                        "id": "gen_right",
+                        "category": "gen_right",
+                        "description": ""
+                    },
+                    "edge_type": "none",
+                    "send_from": "0ad58992",
+                    "condition_label": null
+                },
+                "type": "none",
+                "label": "gen_right",
+                "style": {
+                    "stroke": "#C4CADA",
+                    "strokeWidth": 3
+                },
+                "source": "0ad58992",
+                "target": "d2de4a22",
+                "markerEnd": {
+                    "type": "arrowclosed",
+                    "width": 10,
+                    "height": 10,
+                    "color": "#C4CADA"
+                },
+                "marker_end": null,
+                "marker_start": null,
+                "sourceHandle": "gen_right",
+                "reconnectable": null,
+                "source_handle": "gen_right",
+                "target_handle": null,
+                "condition_label": "gen_right"
+            },
+            {
+                "id": "c062f2d6",
+                "data": {
+                    "send_to": "d2de4a22",
+                    "category": {
+                        "id": "gen_right",
+                        "category": "gen_right",
+                        "description": ""
+                    },
+                    "edge_type": "none",
+                    "send_from": "c0ef2be0",
+                    "condition_label": null
+                },
+                "type": "none",
+                "label": "gen_right",
+                "style": {
+                    "stroke": "#C4CADA",
+                    "strokeWidth": 3
+                },
+                "source": "c0ef2be0",
+                "target": "d2de4a22",
+                "markerEnd": {
+                    "type": "arrowclosed",
+                    "width": 10,
+                    "height": 10,
+                    "color": "#C4CADA"
+                },
+                "marker_end": null,
+                "marker_start": null,
+                "sourceHandle": "gen_right",
+                "reconnectable": null,
+                "source_handle": "gen_right",
+                "target_handle": null,
+                "condition_label": "gen_right"
+            }
+        ]
+    }
+}

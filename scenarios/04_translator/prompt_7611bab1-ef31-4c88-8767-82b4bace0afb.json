@@ -1,0 +1,32 @@
+{
+  "name": "korean-to-foreign-language",
+  "desc": null,
+  "release": true,
+  "messages": [
+    {
+      "message": "I'm planning to translate given sentence into other languages. \nIf the target language is specified in the  previous conversation or question, translate into that language. If not specified, translate into English.\nWhen translating, please refer to the context section for any information that might be helpful if context exist.\nThe answer should contain only the result of the translation.",
+      "mtype": 1
+    },
+    {
+      "message": "Given Sentence: {{query}}\nContext: {{context}}\nLet's Translate Given Sentence.",
+      "mtype": 2
+    }
+  ],
+  "tags": [],
+  "variables": [
+    {
+      "variable": "query",
+      "token_limit": 0,
+      "token_limit_flag": false,
+      "validation": "",
+      "validation_flag": false
+    },
+    {
+      "variable": "context",
+      "token_limit": 0,
+      "token_limit_flag": false,
+      "validation": "",
+      "validation_flag": false
+    }
+  ]
+}

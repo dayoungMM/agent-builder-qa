@@ -531,8 +531,9 @@ with tab_runner:
                 _thread.start()
                 st.rerun()
 
-    # ── 실행 중: 큐 polling + 진행 상황 표시 ─────────
+    # ── 실행 중: 큐 polling ─────────────────────────────
 
+    _just_finished = False
     if st.session_state.running:
         _rq = st.session_state._result_queue
         if _rq:
@@ -569,47 +570,55 @@ with tab_runner:
                     elif _t == "all_done":
                         st.session_state.results = _upd.get("results", [])
                         st.session_state.running = False
+                        _just_finished = True
             except queue.Empty:
                 pass
 
-        if st.session_state.running:
-            st.subheader("진행 상황")
-            for _name, _prog in st.session_state._scenario_progress.items():
-                _status = _prog.get("status", "running")
-                _logs = _prog.get("logs", [])
-                _parts = []
-                for _msg, _lvl in _logs[-15:]:
-                    if _lvl == "error":
-                        _parts.append(f":red[❌ {_msg}]")
-                    elif _lvl == "warning":
-                        _parts.append(f":orange[⚠️ {_msg}]")
-                    else:
-                        _parts.append(f"`{_msg}`")
+    # ── 진행 상황 렌더링 (실행 중 / 완료 모두 표시) ──
 
-                if _status == "running":
-                    with st.status(f"🔄 {_name} 실행 중...", expanded=True):
-                        if _parts:
-                            st.markdown("\n\n".join(_parts))
-                elif _status == "done":
-                    _result = _prog.get("result")
-                    _is_pass = _result and _result.final_status == StepStatus.PASS
-                    with st.status(
-                        f"{'✅' if _is_pass else '❌'} {_name}",
-                        state="complete" if _is_pass else "error",
-                        expanded=not _is_pass,
-                    ):
-                        if _parts:
-                            st.markdown("\n\n".join(_parts))
-                elif _status == "stopped":
-                    st.warning(f"⏹ {_name} — 중단됨")
-                elif _status == "error":
-                    with st.status(f"❌ {_name}", state="error", expanded=True):
-                        if _parts:
-                            st.markdown("\n\n".join(_parts))
-                        st.error(_prog.get("error", "알 수 없는 오류"))
+    if st.session_state._scenario_progress:
+        st.subheader("진행 상황")
+        for _name, _prog in st.session_state._scenario_progress.items():
+            _status = _prog.get("status", "running")
+            _logs = _prog.get("logs", [])
+            _parts = []
+            for _msg, _lvl in _logs[-15:]:
+                if _lvl == "error":
+                    _parts.append(f":red[❌ {_msg}]")
+                elif _lvl == "warning":
+                    _parts.append(f":orange[⚠️ {_msg}]")
+                else:
+                    _parts.append(f"`{_msg}`")
 
-            time.sleep(0.5)
-            st.rerun()
+            if _status == "running":
+                with st.status(f"🔄 {_name} 실행 중...", expanded=True):
+                    if _parts:
+                        st.markdown("\n\n".join(_parts))
+            elif _status == "done":
+                _result = _prog.get("result")
+                _is_pass = _result and _result.final_status == StepStatus.PASS
+                with st.status(
+                    f"{'✅' if _is_pass else '❌'} {_name}",
+                    state="complete" if _is_pass else "error",
+                    expanded=not _is_pass,
+                ):
+                    if _parts:
+                        st.markdown("\n\n".join(_parts))
+            elif _status == "stopped":
+                st.warning(f"⏹ {_name} — 중단됨")
+            elif _status == "error":
+                with st.status(f"❌ {_name}", state="error", expanded=True):
+                    if _parts:
+                        st.markdown("\n\n".join(_parts))
+                    st.error(_prog.get("error", "알 수 없는 오류"))
+
+    # ── Polling 루프 제어 ────────────────────────────
+
+    if st.session_state.running:
+        time.sleep(0.5)
+        st.rerun()
+    elif _just_finished:
+        st.rerun()
 
     # ── Result Report ──────────────────────────────
 

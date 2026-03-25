@@ -1,0 +1,42 @@
+scenario_name: "04_translator"
+
+graph:
+  name: "[QA] Translator"
+  id: d028a60d-f941-49e4-8416-0ff92bbc50b9
+  file_path: "./scenarios/04_translator/graph_translator.json"
+  auto-delete: true
+  update-if-exists: true
+
+app:
+  name: "[QA] Translator"
+  auto-delete: true
+
+llms:
+  - placeholder_in_graph: llm_agent__categorizer_1
+    replace_to: "GIP/gpt-4.1"
+  - placeholder_in_graph: llm_foreign-language-to-korean
+    replace_to: "GIP/gpt-4.1"
+  - placeholder_in_graph: llm_korean-to-foreign-language
+    replace_to: "GIP/gpt-4.1"
+
+prompts:
+  - name: "[QA] foreign-language-to-korean"
+    id: d4a249f5-5249-4852-bb3d-ea6ca10945d3
+    json_path: "./scenarios/04_translator/prompt_d4a249f5-5249-4852-bb3d-ea6ca10945d3.json"
+    auto-delete: true
+    update-if-exists: true
+  - name: "[QA] korean-to-foreign-language"
+    id: 7611bab1-ef31-4c88-8767-82b4bace0afb
+    json_path: "./scenarios/04_translator/prompt_7611bab1-ef31-4c88-8767-82b4bace0afb.json"
+    auto-delete: true
+    update-if-exists: true
+
+answer-judge:
+  - question: "how are you?"
+    criteria:
+      - "HTTP Status 200"
+      - "답변은 한국어로 번역된 내용이어야 함"
+  - question: "생일축하해 영어로"
+    criteria:
+      - "HTTP Status 200"
+      - "답변은 Happy Birthday 여야 함"
