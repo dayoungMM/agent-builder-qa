@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentic-qa-service
+  namespace: aiplatform
+  labels:
+    app: agentic-qa
+spec:
+  type: ClusterIP
+  selector:
+    app: agentic-qa
+  ports:
+    - port: 80
+      targetPort: 8501
+      protocol: TCP

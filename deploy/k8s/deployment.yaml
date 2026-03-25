@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentic-qa
+  namespace: aiplatform
+  labels:
+    app: agentic-qa
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agentic-qa
+  template:
+    metadata:
+      labels:
+        app: agentic-qa
+    spec:
+      containers:
+        - name: agentic-qa
+          image: aip-harbor.sktai.io/sktai/agent/builder-qa:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8501
+          env:
+            - name: LLM_PROVIDER
+              value: "adxp"
+            - name: LLM_MODEL
+              value: "GIP/gpt-4.1"
+            - name: ADXP_JUDGE_ENDPOINT
+              value: "https://aip.sktai.io/api/v1/gateway/chat/completions"
+            - name: BASE_URL
+              value: "https://aip.sktai.io"
+            - name: AUTH_URL
+              value: "https://aip.sktai.io"
+            - name: AUTH_CLIENT_ID
+              value: "default"
+            - name: SSL_VERIFY
+              value: "false"
+            # Sensitive values: inject via Secret or override at deploy time
+            # - name: LLM_API_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: agentic-qa-secret
+            #       key: llm-api-key
+            # - name: AUTH_USERNAME
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: agentic-qa-secret
+            #       key: auth-username
+            # - name: AUTH_PASSWORD
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: agentic-qa-secret
+            #       key: auth-password
+          readinessProbe:
+            httpGet:
+              path: /agentic-qa/_stcore/health
+              port: 8501
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /agentic-qa/_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
