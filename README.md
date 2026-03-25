@@ -86,7 +86,10 @@ Sidebar에서 API Key, Base URL, Admin Token을 설정하고 시나리오를 선
 
 ---
 
-### CLI (자동화 / CronJob)
+### CLI (자동화 / CronJob) ⚠️ 개발 예정
+
+> **현재 미완성 상태입니다.** Streamlit UI를 띄울 수 없는 환경(K8s CronJob 등)에서
+> shell script로 시나리오를 실행하기 위한 구조만 잡혀 있으며, 아직 동작하지 않습니다.
 
 ```bash
 # 단건 실행
